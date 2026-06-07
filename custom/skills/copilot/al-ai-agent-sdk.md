@@ -1,6 +1,6 @@
 ---
 kind: action-skill
-id: ai-agent-sdk
+id: al-ai-agent-sdk
 version: 1
 title: BC Agent SDK Definition Review
 description: Reviews AL source that defines and registers a custom Business Central agent with the AI Agent SDK and emits a findings report.
@@ -77,7 +77,7 @@ Output conforms to the DO output contract. A populated example:
 
 ```json
 {
-  "skill": { "id": "ai-agent-sdk", "version": 1 },
+  "skill": { "id": "al-ai-agent-sdk", "version": 1 },
   "outcome": "completed",
   "summary": {
     "counts": { "blocker": 1, "major": 1, "minor": 0, "info": 0 },

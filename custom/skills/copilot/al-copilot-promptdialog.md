@@ -1,6 +1,6 @@
 ---
 kind: action-skill
-id: copilot-promptdialog
+id: al-copilot-promptdialog
 version: 1
 title: Copilot PromptDialog Page Review
 description: Reviews Business Central Copilot UX implemented with the PromptDialog page type and emits a findings report.
@@ -79,7 +79,7 @@ Output conforms to the DO output contract. A populated example:
 
 ```json
 {
-  "skill": { "id": "copilot-promptdialog", "version": 1 },
+  "skill": { "id": "al-copilot-promptdialog", "version": 1 },
   "outcome": "completed",
   "summary": {
     "counts": { "blocker": 1, "major": 1, "minor": 0, "info": 0 },

@@ -1,6 +1,6 @@
 ---
 kind: action-skill
-id: ai-test-driven-development
+id: al-ai-test-driven-development
 version: 1
 title: AI Test-Driven Development Review
 description: Reviews Business Central Copilot and agent test suites against the Evaluation-tool TDD discipline and emits a findings report.
@@ -78,7 +78,7 @@ Output conforms to the DO output contract. A populated example:
 
 ```json
 {
-  "skill": { "id": "ai-test-driven-development", "version": 1 },
+  "skill": { "id": "al-ai-test-driven-development", "version": 1 },
   "outcome": "completed",
   "summary": {
     "counts": { "blocker": 1, "major": 1, "minor": 0, "info": 0 },

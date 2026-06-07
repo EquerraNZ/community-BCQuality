@@ -1,6 +1,6 @@
 ---
 kind: action-skill
-id: bc-webclient-runner
+id: al-bc-webclient-runner
 version: 1
 title: BC web client runner
 description: Drives the rendered BC web client through a documented flow to catch UI residue AL TestPage cannot observe.
@@ -64,7 +64,7 @@ Output conforms to the DO output contract. Rendered-UI defects with no curated b
 
 ```json
 {
-  "skill": { "id": "bc-webclient-runner", "version": 1 },
+  "skill": { "id": "al-bc-webclient-runner", "version": 1 },
   "outcome": "completed",
   "summary": {
     "counts": { "blocker": 0, "major": 0, "minor": 2, "info": 0 },

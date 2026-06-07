@@ -1,6 +1,6 @@
 ---
 kind: action-skill
-id: performance-profiler
+id: al-performance-profiler
 version: 1
 title: BC Performance Profiler Practice Review
 description: Reviews how Business Central performance profiling is captured and interpreted and emits a findings report.
@@ -64,7 +64,7 @@ Output conforms to the DO output contract. A populated example:
 
 ```json
 {
-  "skill": { "id": "performance-profiler", "version": 1 },
+  "skill": { "id": "al-performance-profiler", "version": 1 },
   "outcome": "completed",
   "summary": {
     "counts": { "blocker": 1, "major": 1, "minor": 0, "info": 0 },

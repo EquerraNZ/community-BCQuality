@@ -1,6 +1,6 @@
 ---
 kind: action-skill
-id: bc-mcp-server-data
+id: al-bc-mcp-server-data
 version: 1
 title: BC Product MCP Server Configuration Review
 description: Reviews a Business Central product MCP server configuration for the API surface, operation permissions, and client authentication it exposes, and emits a findings report.
@@ -89,7 +89,7 @@ API pages of subtype `ListPart` or `CardPart` are not supported, and only top-le
 
 ### Connection string and authentication
 
-The connection string from `Advanced > Connection String` carries `TenantId`, `EnvironmentName`, `Company`, and an optional `ConfigurationName`. Authentication is OAuth 2.0 Authorization Code with PKCE against Entra ID; Microsoft clients (VS Code, Copilot Studio) use a pre-registered application, while non-Microsoft clients (Claude, ChatGPT, custom) must register their own Entra application. All operations run as the signed-in user's identity, so the audit trail shows who did what. Flag a checked-in connection string or exported configuration that embeds a secret, or any reliance on a shared service-account identity that defeats per-user audit, as a `blocker`. See `rbac-and-access` for the Entra app-registration patterns when wiring non-Microsoft clients.
+The connection string from `Advanced > Connection String` carries `TenantId`, `EnvironmentName`, `Company`, and an optional `ConfigurationName`. Authentication is OAuth 2.0 Authorization Code with PKCE against Entra ID; Microsoft clients (VS Code, Copilot Studio) use a pre-registered application, while non-Microsoft clients (Claude, ChatGPT, custom) must register their own Entra application. All operations run as the signed-in user's identity, so the audit trail shows who did what. Flag a checked-in connection string or exported configuration that embeds a secret, or any reliance on a shared service-account identity that defeats per-user audit, as a `blocker`. See `al-rbac-and-access` for the Entra app-registration patterns when wiring non-Microsoft clients.
 
 ### Recommended defaults (flag deviations)
 
@@ -98,7 +98,7 @@ The connection string from `Advanced > Connection String` carries `TenantId`, `E
 - Turn on Dynamic Tool Mode for any configuration exceeding 20 APIs, to future-proof against the 70-tool cap.
 - Each configuration documents its audience and intended use.
 
-Set `confidence` to `high` for unambiguous switch/permission matches in the exported JSON, `medium` for heuristic detections or when any frontmatter dimension was `unknown`, and `low` for applicability-only advisories. Provide `suggested-code` only for mechanical, local JSON edits (flip a write permission off, set a header); otherwise set `suggested-code-omission-reason`. See `skills/do.md` for the full contract. For the developer-tool MCP, see `al-mcp-server`; for in-product Copilot UX, see `copilot-promptdialog`.
+Set `confidence` to `high` for unambiguous switch/permission matches in the exported JSON, `medium` for heuristic detections or when any frontmatter dimension was `unknown`, and `low` for applicability-only advisories. Provide `suggested-code` only for mechanical, local JSON edits (flip a write permission off, set a header); otherwise set `suggested-code-omission-reason`. See `skills/do.md` for the full contract. For the developer-tool MCP, see `al-mcp-server`; for in-product Copilot UX, see `al-copilot-promptdialog`.
 
 Outcome selection: `completed` when every worklist item was evaluated (including an empty `findings` array); `no-knowledge` when no applicable rule survived Source, Relevance, and configuration filtering; `not-applicable` when the target is on-prem or no MCP configuration is present; `partial` when a budget was hit before the worklist was exhausted; `failed` on an unrecoverable error (`outcome-reason` required).
 
@@ -108,7 +108,7 @@ Output conforms to the DO output contract. A populated example:
 
 ```json
 {
-  "skill": { "id": "bc-mcp-server-data", "version": 1 },
+  "skill": { "id": "al-bc-mcp-server-data", "version": 1 },
   "outcome": "completed",
   "summary": {
     "counts": { "blocker": 1, "major": 1, "minor": 0, "info": 0 },

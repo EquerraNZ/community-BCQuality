@@ -1,6 +1,6 @@
 ---
 kind: action-skill
-id: bcquality-integration
+id: al-bcquality-integration
 version: 1
 title: BCQuality Consumption Review
 description: Reviews whether a consuming repo and its verifier agents consume the BCQuality knowledge corpus correctly and emits a findings report.
@@ -64,7 +64,7 @@ Output conforms to the DO output contract. A populated example:
 
 ```json
 {
-  "skill": { "id": "bcquality-integration", "version": 1 },
+  "skill": { "id": "al-bcquality-integration", "version": 1 },
   "outcome": "completed",
   "summary": {
     "counts": { "blocker": 1, "major": 1, "minor": 0, "info": 0 },

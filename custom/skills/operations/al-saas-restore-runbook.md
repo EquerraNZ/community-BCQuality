@@ -1,6 +1,6 @@
 ---
 kind: action-skill
-id: saas-restore-runbook
+id: al-saas-restore-runbook
 version: 1
 title: BC SaaS Point-in-Time Restore Review
 description: Reviews a Business Central SaaS point-in-time restore plan against the platform limits and recovery runbook and emits a findings report.
@@ -20,7 +20,7 @@ An orchestrator invokes this skill with a `repository` (an audit of the restore 
 
 ## Source
 
-The rule set is the BC SaaS point-in-time restore runbook: the platform's hard limits, the allowed restore paths, prerequisites, and the pre- and post-restore checklists. BCQuality's curated knowledge domains do not cover SaaS restore operations, so this skill carries its own rule set in full. Read the BCQuality knowledge index once to confirm no curated domain claims this area (the `knowledge-index.json` Entry's preparation step regenerates over the already-filtered clone); do not open individual article bodies. Findings here are agent findings within this skill's restore-governance domain. Restricting access during the restore window is owned by `security-group-setup`; CI/CD reattachment is owned by `al-go-environment-onboarding`.
+The rule set is the BC SaaS point-in-time restore runbook: the platform's hard limits, the allowed restore paths, prerequisites, and the pre- and post-restore checklists. BCQuality's curated knowledge domains do not cover SaaS restore operations, so this skill carries its own rule set in full. Read the BCQuality knowledge index once to confirm no curated domain claims this area (the `knowledge-index.json` Entry's preparation step regenerates over the already-filtered clone); do not open individual article bodies. Findings here are agent findings within this skill's restore-governance domain. Restricting access during the restore window is owned by `al-security-group-setup`; CI/CD reattachment is owned by `al-go-environment-onboarding`.
 
 ## Relevance
 
@@ -39,7 +39,7 @@ Narrow the runbook to the rules that apply to the plan under review. Group the c
 
 - **Hard limits** - at most 10 restores per calendar month; the chosen point is within the 28-day retention window; same Azure region only (no cross-region); no localisation change during restore; no Sandbox-to-Production restore; the path is one of Prod to Prod, Prod to Sandbox, or Sandbox to Sandbox. Production restores bypass the sandbox capacity limit by design; sandbox restores do not, so a sandbox at cap requires soft-deleting an existing sandbox first.
 - **Prerequisites** - the operator holds the `D365 BACKUP/RESTORE` permission set; the customer has a paid (not trial) subscription; the target environment exists or a new one is being created.
-- **Pre-restore checklist** - restore point confirmed within 28 days; region confirmed; permission confirmed; Job Queues paused on the source; access restricted if sensitive (via `security-group-setup`); the original renamed with `-DONOTUSE` if the name is being reused; the installed-app list snapshotted for PTE reinstall.
+- **Pre-restore checklist** - restore point confirmed within 28 days; region confirmed; permission confirmed; Job Queues paused on the source; access restricted if sensitive (via `al-security-group-setup`); the original renamed with `-DONOTUSE` if the name is being reused; the installed-app list snapshotted for PTE reinstall.
 - **What gets restored versus cleaned** - business data, posted documents, master and setup data, dimensions, and journal entries are restored; AppSource apps come back at latest hotfix (Microsoft policy, not configurable); dev-only VS Code extensions are not restored and need manual reinstall; integrations (Document Exchange, Currency Exchange Rates, VAT validation, Graph Mail, CRM/CDS, webhooks) come up disabled; OCR passwords, SMTP config, Exchange URLs, and Outlook REST accounts are cleared.
 - **Post-restore checklist** - AppSource app versions verified; PTEs reinstalled; disabled integrations re-enabled and tested one by one; webhook subscriptions reconfigured; API consumers re-added; smoke tests run across Sales, Purchase, Finance, and Reporting; access unrestricted; customer notified; `-DONOTUSE` original deleted only after the customer confirms.
 - **Customer communication** - before: estimated downtime, integrations come up disabled, work after the restore point is lost; after: smoke tests run, which credentials the customer must re-enter, the new environment name and access changes.
@@ -66,7 +66,7 @@ Output conforms to the DO output contract. A populated example:
 
 ```json
 {
-  "skill": { "id": "saas-restore-runbook", "version": 1 },
+  "skill": { "id": "al-saas-restore-runbook", "version": 1 },
   "outcome": "completed",
   "summary": {
     "counts": { "blocker": 0, "major": 1, "minor": 1, "info": 0 },

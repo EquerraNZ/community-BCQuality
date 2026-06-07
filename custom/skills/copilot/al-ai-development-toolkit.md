@@ -1,6 +1,6 @@
 ---
 kind: action-skill
-id: ai-development-toolkit
+id: al-ai-development-toolkit
 version: 1
 title: BC Agent Toolkit Integration Review
 description: Reviews AL that integrates with the Business Central agent design experience and the Tasks AL API and emits a findings report.
@@ -76,7 +76,7 @@ Output conforms to the DO output contract. A populated example:
 
 ```json
 {
-  "skill": { "id": "ai-development-toolkit", "version": 1 },
+  "skill": { "id": "al-ai-development-toolkit", "version": 1 },
   "outcome": "completed",
   "summary": {
     "counts": { "blocker": 0, "major": 1, "minor": 1, "info": 0 },
