@@ -14,7 +14,7 @@ application-area: [all]
 
 # Feature Specification Review
 
-Reviews a feature specification (`specs/features/<id>/spec.md`) for one Business Central feature against the project constitution, and emits a findings report. The spec captures the what and why; it must not name AL objects (that is `plan-feature`). The review checks that the constitution exists, that the spec is consistent with all three constitution documents, that its acceptance criteria are concrete enough to become tests, that open questions are recorded rather than guessed away, and that the roadmap status reflects the spec stage. This is a leaf action skill: it invokes no sub-skills.
+Reviews a feature specification (`specs/features/<id>/spec.md`) for one Business Central feature against the project constitution, and emits a findings report. The spec captures the what and why; it must not name AL objects (that is `al-plan-feature`). The review checks that the constitution exists, that the spec is consistent with all three constitution documents, that its acceptance criteria are concrete enough to become tests, that open questions are recorded rather than guessed away, and that the roadmap status reflects the spec stage. This is a leaf action skill: it invokes no sub-skills.
 
 An orchestrator invokes this skill with a `repository` (audit a feature spec against the constitution and roadmap) or a `file-path` (review the `spec.md` alone). The skill produces a single JSON document conforming to the DO output contract. See `AGENTS.md`.
 
@@ -37,12 +37,12 @@ Discard files that are not feature specs. Retain conditionally applicable rules 
 
 Narrow to the spec rules that apply to the document under review. A rule enters the worklist when the spec exists, or its precondition is unmet.
 
-- **Constitution precondition** - `specs/brief.md` and `specs/tech-design.md` must exist and have content. If either is missing or empty, the spec has no grounding and `spec-init` must run first.
+- **Constitution precondition** - `specs/brief.md` and `specs/tech-design.md` must exist and have content. If either is missing or empty, the spec has no grounding and `al-spec-init` must run first.
 - **Consistency with the constitution** - the spec must be consistent with `brief.md`, `tech-design.md`, and `roadmap.md` (goals, non-goals, constraints, the in-play modules). A spec contradicting the constitution is a finding.
 - **Feature identity** - the feature uses the next `todo` roadmap item or the feature the user named, with a confirmed id and slug (`NNN-slug`) matching the roadmap number. A mismatched or missing id/slug is a finding.
 - **Required spec sections** - `spec.md` (from `specs/templates/feature-spec.md`) covers: problem, users and roles, scope, out of scope, user flow, acceptance criteria, data and rules, telemetry, open questions. A missing required section is a gap.
 - **Testable acceptance criteria** - acceptance criteria must be concrete enough to become tests. A vague, unmeasurable, or untestable criterion is a finding (this becomes the basis for test coverage downstream).
-- **No AL, no object names** - the spec captures what and why; naming AL objects is `plan-feature`'s job. AL or object names leaking into the spec is a finding.
+- **No AL, no object names** - the spec captures what and why; naming AL objects is `al-plan-feature`'s job. AL or object names leaking into the spec is a finding.
 - **Open questions resolved or recorded** - ambiguities (scope edges, rules, user roles) must be recorded under Open questions rather than guessed. An unresolved open question silently resolved by a guess is a finding.
 - **Roadmap status** - the roadmap item moves to `spec`. A stale roadmap status is a finding.
 
@@ -55,7 +55,7 @@ For each worklist item, evaluate the spec and emit findings:
 - A mismatched feature id/slug versus the roadmap number, a stale roadmap status, or a thin telemetry section, is `minor`.
 - When a rule is clearly applicable and the spec satisfies it, emit `info`.
 
-Cite a `process` or `testing` knowledge file in `references` when one matches; otherwise emit an agent finding within this skill's domain (`references: []`, `id` prefixed `agent:`). Set `confidence` `high` for unambiguous structural gaps (a missing section, an unresolved open question, a literal object name), `medium` for judgement calls (whether a criterion is truly testable) or `unknown`-dimension cases. Keep inline references such as `spec-init` (run first if the constitution is missing), `plan-feature` (the next stage once approved), and `bc-integrations`, `copilot-promptdialog`, `ai-agent-sdk` (scoping behaviour when relevant) as prose; do not invoke them. This skill reviews the spec only. See `skills/do.md` for the full contract.
+Cite a `process` or `testing` knowledge file in `references` when one matches; otherwise emit an agent finding within this skill's domain (`references: []`, `id` prefixed `agent:`). Set `confidence` `high` for unambiguous structural gaps (a missing section, an unresolved open question, a literal object name), `medium` for judgement calls (whether a criterion is truly testable) or `unknown`-dimension cases. Keep inline references such as `al-spec-init` (run first if the constitution is missing), `al-plan-feature` (the next stage once approved), and `bc-integrations`, `copilot-promptdialog`, `ai-agent-sdk` (scoping behaviour when relevant) as prose; do not invoke them. This skill reviews the spec only. See `skills/do.md` for the full contract.
 
 Outcome selection: `completed` when every applicable spec rule was evaluated; `no-knowledge` when no applicable rule survived filtering; `not-applicable` when the task context has no feature spec to review; `partial` on a budget cutoff; `failed` on an unrecoverable error (`outcome-reason` required).
 

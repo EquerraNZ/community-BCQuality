@@ -1,6 +1,6 @@
 ---
 kind: action-skill
-id: major-release-readiness
+id: al-major-release-governance
 version: 1
 title: Major version upgrade readiness review
 description: Reviews Business Central major-version upgrade governance - NextMajor branching, compatibility testing, and app.json version bumps - and emits a findings report.
@@ -63,7 +63,7 @@ Output conforms to the DO output contract. A populated example:
 
 ```json
 {
-  "skill": { "id": "major-release-readiness", "version": 1 },
+  "skill": { "id": "al-major-release-governance", "version": 1 },
   "outcome": "completed",
   "summary": {
     "counts": { "blocker": 1, "major": 0, "minor": 0, "info": 0 },

@@ -25,4 +25,4 @@ Building one mega-configuration that exposes many entities with write enabled "j
 
 ## See also
 
-- `expose-bc-entities-as-api-pages-for-external-agents.md`
+- `al-expose-bc-entities-as-api-pages-for-external-agents.md`

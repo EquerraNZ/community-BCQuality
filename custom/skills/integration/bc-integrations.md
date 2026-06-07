@@ -14,7 +14,7 @@ application-area: [all]
 
 # BC Integration Architecture Review
 
-Reviews the architecture of any integration between Business Central and an external system (Shopify, 3PL, WMS, custom services, partner platforms) and emits a findings report. It checks the high-level choices: middleware versus direct API, inbound publisher patterns, outbound business events, idempotency, sync direction, and error escalation. This is a leaf action skill: it invokes no sub-skills. For the detailed BC-side house rules it pairs with `modern-integration-patterns`, and for the Azure plane with `azure-integration-review`.
+Reviews the architecture of any integration between Business Central and an external system (Shopify, 3PL, WMS, custom services, partner platforms) and emits a findings report. It checks the high-level choices: middleware versus direct API, inbound publisher patterns, outbound business events, idempotency, sync direction, and error escalation. This is a leaf action skill: it invokes no sub-skills. For the detailed BC-side house rules it pairs with `al-modern-integration-patterns`, and for the Azure plane with `azure-integration-review`.
 
 An orchestrator invokes this skill with either a `pr-diff` (the standard PR-review entry point) or a `file-path` (single-file review of an integration object). The skill produces a single JSON document conforming to the DO output contract.
 
@@ -52,7 +52,7 @@ For each worklist item, evaluate the change and emit findings. Cite the matching
 
 - **Direct API vs middleware.** Use Azure Integration Services as the integration plane; do not call third-party APIs directly from AL. Retry, dead-letter, and observability sit in the plane; BC stays free of external credential management; third-party schema evolution does not break BC. Exception: simple one-shot lookups (currency conversion, address validation) may use `HttpClient` from AL directly, with timeouts and explicit error handling. A direct callout from a posting or business-logic path is a `blocker`.
 - **Inbound to BC.** Prefer the API publisher pattern with custom API pages. Use OData for typed access, SOAP only when the consumer cannot do OData.
-- **Outbound from BC.** Publish business events; never poll BC from outside when events are available. For a subscriber outside BC, declare an `[ExternalBusinessEvent]` (not the in-process `[BusinessEvent]`) and fire it from a thin subscriber on the real event (release, post). Delivery is asynchronous and post-commit, so it is safe to fire from a posting or release path and nothing is delivered if the transaction rolls back. The external subscriber registers directly by POSTing to `api/microsoft/runtime/v1.0/externaleventsubscriptions` with a `notificationUrl` and a `clientState` (the shared secret echoed on every notification); it needs the `Ext. Events - Subscr` permission set. BC delivers by HTTP webhook to that URL. There is no direct Service Bus or Event Grid delivery for BC, so to land events on a queue, point `notificationUrl` at a thin Function that forwards to it. See `modern-integration-patterns` for the citable rules and `specs/contracts/integration-contract.md` for a worked example.
+- **Outbound from BC.** Publish business events; never poll BC from outside when events are available. For a subscriber outside BC, declare an `[ExternalBusinessEvent]` (not the in-process `[BusinessEvent]`) and fire it from a thin subscriber on the real event (release, post). Delivery is asynchronous and post-commit, so it is safe to fire from a posting or release path and nothing is delivered if the transaction rolls back. The external subscriber registers directly by POSTing to `api/microsoft/runtime/v1.0/externaleventsubscriptions` with a `notificationUrl` and a `clientState` (the shared secret echoed on every notification); it needs the `Ext. Events - Subscr` permission set. BC delivers by HTTP webhook to that URL. There is no direct Service Bus or Event Grid delivery for BC, so to land events on a queue, point `notificationUrl` at a thin Function that forwards to it. See `al-modern-integration-patterns` for the citable rules and `specs/contracts/integration-contract.md` for a worked example.
 
 ### Common patterns
 
@@ -85,22 +85,22 @@ Output conforms to the DO output contract. A populated example:
   },
   "findings": [
     {
-      "id": "custom/knowledge/integration/never-call-external-services-from-posting.md",
+      "id": "custom/knowledge/integration/al-never-call-external-services-from-posting.md",
       "severity": "blocker",
       "message": "A third-party WMS API is called via HttpClient directly from an OnAfterPostSalesDoc subscriber, holding document locks across an external call. Recommendation: stage the work to the Integration Message and let the Job Queue send it outside the posting transaction.",
       "location": { "file": "src/Integration/ShipmentNotifier.Codeunit.al", "line": 47 },
       "references": [
-        { "path": "custom/knowledge/integration/never-call-external-services-from-posting.md" }
+        { "path": "custom/knowledge/integration/al-never-call-external-services-from-posting.md" }
       ],
       "confidence": "high"
     },
     {
-      "id": "custom/knowledge/integration/deduplicate-inbound-messages-with-an-idempotency-check.md",
+      "id": "custom/knowledge/integration/al-deduplicate-inbound-messages-with-an-idempotency-check.md",
       "severity": "major",
       "message": "The inbound order-import write does not check the external reference before inserting, so an upstream retry creates a duplicate sales order. Recommendation: store the source system's stable id and make repeated calls with the same id no-ops.",
       "location": { "file": "src/Integration/OrderImport.Codeunit.al", "line": 112 },
       "references": [
-        { "path": "custom/knowledge/integration/deduplicate-inbound-messages-with-an-idempotency-check.md" }
+        { "path": "custom/knowledge/integration/al-deduplicate-inbound-messages-with-an-idempotency-check.md" }
       ],
       "confidence": "medium"
     }

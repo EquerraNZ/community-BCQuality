@@ -14,7 +14,7 @@ application-area: [all]
 
 # Azure Integration Plane Review
 
-Reviews the Azure side of a Business Central integration: the webhook receiver that catches a storefront event, the Logic App that routes a shipment to a WMS, the Service Bus topic that carries Business Events, the Durable Function that schedules a retry, and the Bicep, ARM, or Terraform that provisions them. The integration plane exists so that retry, dead-letter, observability, and credential handling live outside BC, so that BC stays free of external credentials and third-party schema changes do not break BC. This is a leaf action skill: it invokes no sub-skills. For the BC-side rules on the same flows, the orchestrator pairs it with `modern-integration-patterns`.
+Reviews the Azure side of a Business Central integration: the webhook receiver that catches a storefront event, the Logic App that routes a shipment to a WMS, the Service Bus topic that carries Business Events, the Durable Function that schedules a retry, and the Bicep, ARM, or Terraform that provisions them. The integration plane exists so that retry, dead-letter, observability, and credential handling live outside BC, so that BC stays free of external credentials and third-party schema changes do not break BC. This is a leaf action skill: it invokes no sub-skills. For the BC-side rules on the same flows, the orchestrator pairs it with `al-modern-integration-patterns`.
 
 An orchestrator invokes this skill with a `pr-diff` or `file-path` (a change to an Azure artifact under review) or a `repository` (a plane-wide audit). The skill produces a single JSON document conforming to the DO output contract. When the repository contains no Azure artifacts, it reports that plainly and passes; it does not invent findings against files that do not exist.
 
@@ -87,7 +87,7 @@ For each worklist item, evaluate the artifact and emit findings. The citable rul
 
 ### Cross-checks with the BC side
 
-A complete review pairs this skill with `modern-integration-patterns`. The arrows must line up end to end:
+A complete review pairs this skill with `al-modern-integration-patterns`. The arrows must line up end to end:
 
 - An outbound BC call sets an `Idempotency-Key`; the plane must forward it (`house:outbound-idempotency-key` ↔ `house:az-forward-idempotency-key`).
 - BC sets a Correlation ID once; the plane must carry it on every hop (`house:correlation-id-propagation` ↔ `house:az-correlation-header`).

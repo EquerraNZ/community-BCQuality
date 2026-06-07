@@ -20,7 +20,7 @@ An orchestrator invokes this skill with a `pr-diff`, a `file-path`, or a `reposi
 
 ## Source
 
-Read the BCQuality knowledge index once (the `knowledge-index.json` Entry's preparation step regenerates over the live, already-filtered clone). Take the index entries whose `domain` is `integration`, `performance`, or `security` as the citable candidate set across every enabled layer. The `integration` domain is the primary source: cite `custom/knowledge/integration/stage-every-integration-message.md` for the staging requirement and decoupling, and `custom/knowledge/integration/never-call-external-services-from-posting.md` for the callout-from-posting anti-pattern, and any further integration files the index lists for idempotency, framing, business-events versioning, and correlation. The `performance` and `security` domains supply supporting citations: a commit inside a fetch or send loop, a user prompt inside a posting transaction, and an integration event that leaks a secret each map onto a curated rule. Do not open individual article files at this step; open an article's full body only once it enters the Worklist below. Where a concrete integration defect has no curated rule, emit an agent finding within this skill's integration domain (see Action).
+Read the BCQuality knowledge index once (the `knowledge-index.json` Entry's preparation step regenerates over the live, already-filtered clone). Take the index entries whose `domain` is `integration`, `performance`, or `security` as the citable candidate set across every enabled layer. The `integration` domain is the primary source: cite `custom/knowledge/integration/al-stage-every-integration-message.md` for the staging requirement and decoupling, and `custom/knowledge/integration/al-never-call-external-services-from-posting.md` for the callout-from-posting anti-pattern, and any further integration files the index lists for idempotency, framing, business-events versioning, and correlation. The `performance` and `security` domains supply supporting citations: a commit inside a fetch or send loop, a user prompt inside a posting transaction, and an integration event that leaks a secret each map onto a curated rule. Do not open individual article files at this step; open an article's full body only once it enters the Worklist below. Where a concrete integration defect has no curated rule, emit an agent finding within this skill's integration domain (see Action).
 
 ## Relevance
 
@@ -51,7 +51,7 @@ A curated `integration`, `performance`, or `security` file enters the worklist w
 
 For each worklisted code path, check it against the patterns and emit findings.
 
-When a defect maps onto a curated knowledge file, emit a knowledge-backed finding citing that file: `id` equal to the file path, the file as primary reference, `confidence` `high` for an unambiguous match. Severity is `blocker` only when the file states a platform-level guarantee, otherwise `major`. The hard anti-patterns cite the integration corpus directly: an `HttpClient.Send` reachable from a posting routine or posting subscriber cites `custom/knowledge/integration/never-call-external-services-from-posting.md`; a webhook or poll handler that posts or runs business logic inline rather than staging cites `custom/knowledge/integration/stage-every-integration-message.md`. A commit inside a fetch or send loop, a user prompt inside a posting transaction, or an integration event that exposes a secret cite the matching `performance` or `security` file.
+When a defect maps onto a curated knowledge file, emit a knowledge-backed finding citing that file: `id` equal to the file path, the file as primary reference, `confidence` `high` for an unambiguous match. Severity is `blocker` only when the file states a platform-level guarantee, otherwise `major`. The hard anti-patterns cite the integration corpus directly: an `HttpClient.Send` reachable from a posting routine or posting subscriber cites `custom/knowledge/integration/al-never-call-external-services-from-posting.md`; a webhook or poll handler that posts or runs business logic inline rather than staging cites `custom/knowledge/integration/al-stage-every-integration-message.md`. A commit inside a fetch or send loop, a user prompt inside a posting transaction, or an integration event that exposes a secret cite the matching `performance` or `security` file.
 
 When a concrete, demonstrable integration defect has no curated rule (a synchronous sleep-and-poll wait loop in an inbound API handler, a missing polling framing record or lock, a missing inbound idempotency lookup keyed on the source id, a missing or non-deterministic outbound idempotency key, a mutated published Business Event signature, a dropped correlation id, cross-stage global state), emit an agent finding within this skill's integration domain: `references: []`, `id` slug prefixed `agent:` (for example `agent:missing-inbound-idempotency-check`), `confidence` capped at `medium`, `severity` capped at `minor`, and a self-contained `message` describing the failure mode under a slow, down, or duplicating external system and a concrete fix. Where the impact would normally gate (a synchronous wait loop that ties up a handler), keep `severity` at `minor` but say so plainly in the `message` and note the concern should be promoted to a knowledge-backed rule before it can gate. Hold every candidate to the precision bar in `skills/do.md`: steelman that the path is correct as written before emitting, and omit when in doubt. Before emitting any agent candidate, check the worklisted knowledge for a match and upgrade it to a knowledge-backed finding if one exists.
 
@@ -73,7 +73,7 @@ Output conforms to the DO output contract. A populated example:
   },
   "findings": [
     {
-      "id": "custom/knowledge/integration/never-call-external-services-from-posting.md",
+      "id": "custom/knowledge/integration/al-never-call-external-services-from-posting.md",
       "severity": "major",
       "message": "HttpClient.Send is called from WMS Notifier.NotifyWMS, which runs in OnAfterPostSalesDoc. The posting transaction holds locks on the shipment while waiting on the WMS. Stage an Integration Message inside the posting hook and let the Job Queue send it.",
       "location": {
@@ -81,7 +81,7 @@ Output conforms to the DO output contract. A populated example:
         "line": 31
       },
       "references": [
-        { "path": "custom/knowledge/integration/never-call-external-services-from-posting.md" }
+        { "path": "custom/knowledge/integration/al-never-call-external-services-from-posting.md" }
       ],
       "confidence": "high"
     },

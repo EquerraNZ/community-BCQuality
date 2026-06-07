@@ -48,12 +48,12 @@ Narrow to the constitution rules that apply to the documents under review. A rul
 
 For each worklist item, evaluate the constitution and emit findings:
 
-- A missing `brief.md` or `tech-design.md` (the constitution does not exist, so no feature spec should proceed), or a `tech-design.md` with no declared object ID range, is a `blocker`: downstream `spec-feature`/`plan-feature` work cannot ground itself.
+- A missing `brief.md` or `tech-design.md` (the constitution does not exist, so no feature spec should proceed), or a `tech-design.md` with no declared object ID range, is a `blocker`: downstream `al-spec-feature`/`al-plan-feature` work cannot ground itself.
 - An unjustified custom-code gap where a standard BC module fits, a `roadmap.md` whose numbering does not match the feature-folder convention, a brief that contains AL or invented facts, or a refresh that discarded a still-valid prior decision, is `major`.
 - A missing success measure, an unsurfaced open question, or a thin cross-cutting-concerns section in `tech-design.md`, is `minor`.
 - When a document is present and satisfies its rule, emit `info`.
 
-Cite a `process` or `style` knowledge file in `references` when one matches; otherwise emit an agent finding within this skill's domain (`references: []`, `id` prefixed `agent:`). Set `confidence` `high` for unambiguous structural gaps (a missing file, an absent object ID range), `medium` for judgement calls (whether a custom-code gap is justified) or `unknown`-dimension cases. Keep inline references such as `spec-feature` (the next stage once the constitution is approved) and `al-code-review` (house rules) as prose; do not invoke them. This skill reviews the constitution only; AL-level defects belong to other skills and must not be emitted here. See `skills/do.md` for the full contract.
+Cite a `process` or `style` knowledge file in `references` when one matches; otherwise emit an agent finding within this skill's domain (`references: []`, `id` prefixed `agent:`). Set `confidence` `high` for unambiguous structural gaps (a missing file, an absent object ID range), `medium` for judgement calls (whether a custom-code gap is justified) or `unknown`-dimension cases. Keep inline references such as `al-spec-feature` (the next stage once the constitution is approved) and `al-code-review` (house rules) as prose; do not invoke them. This skill reviews the constitution only; AL-level defects belong to other skills and must not be emitted here. See `skills/do.md` for the full contract.
 
 Outcome selection: `completed` when every applicable constitution rule was evaluated; `no-knowledge` when no applicable rule survived filtering; `not-applicable` when the task context has no `specs/` constitution to review; `partial` on a budget cutoff; `failed` on an unrecoverable error (`outcome-reason` required).
 
