@@ -1,6 +1,6 @@
 ---
 kind: task-skill
-id: modern-integration-patterns
+id: al-modern-integration-patterns
 version: 1
 title: Modern BC integration patterns and anti-patterns
 description: The pattern and anti-pattern catalog for Business Central integrations, distilled from the BCTechDays 2026 "Modern Integrations" session. Use when reviewing or designing inbound, outbound, long-running, or manual integration code in AL, and as the house-rule source the al-integration-pattern-reviewer agent cites.

@@ -81,7 +81,7 @@ AL-Go needs to rewrite its own workflows to upgrade itself. That requires a GitH
 
 - Do not hand-edit any file under `.github/workflows/AL-Go-*`. Those are owned by AL-Go.
 - Do not skip the **Update AL-Go System Files** step after changing settings that affect workflow shape.
-- Do not branch a release into `release/extension/NextMajor` until all customer environments are on the new major. See `major-release-readiness` for the upgrade governance.
+- Do not branch a release into `release/extension/NextMajor` until all customer environments are on the new major. See `al-major-release-governance` for the upgrade governance.
 - Do not commit signed apps into your AL-Go repo. They go into `d365-dependent-artifacts` and are pulled in via the submodule.
 
 ## AL MCP Server in CI
@@ -116,7 +116,7 @@ See `al-mcp-server` for the full tool reference and JSON-RPC envelope.
 
 - `al-mcp-server` for the standalone AL MCP server tools used in agent-driven CI
 - `al-go-environment-onboarding` for the per-environment setup (S2S, AUTHCONTEXT, deploy block).
-- `major-release-readiness` for the rules around BC major version upgrades.
+- `al-major-release-governance` for the rules around BC major version upgrades.
 
 ## References
 

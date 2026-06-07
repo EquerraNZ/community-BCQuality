@@ -19,7 +19,7 @@ that catches a storefront event, the Logic App that routes a shipment to a WMS,
 the Service Bus topic that carries Business Events, the Durable Function that
 schedules a retry, and the Bicep / ARM / Terraform that provisions them. This
 skill is the rule source the `azure-integration-validator` agent cites. For the
-BC-side rules on the same flows, see `modern-integration-patterns`.
+BC-side rules on the same flows, see `al-modern-integration-patterns`.
 
 ## The integration plane earns its keep
 
@@ -123,7 +123,7 @@ no vendored BCQuality Azure domain.
 
 ## Cross-checks with the BC side
 
-A complete review pairs this skill with `modern-integration-patterns`. The
+A complete review pairs this skill with `al-modern-integration-patterns`. The
 arrows must line up end to end:
 
 - An outbound BC call sets an `Idempotency-Key`; the plane must forward it
@@ -137,6 +137,6 @@ arrows must line up end to end:
 
 ## Related skills
 
-- `modern-integration-patterns` for the BC-side rules on the same flows.
+- `al-modern-integration-patterns` for the BC-side rules on the same flows.
 - `rbac-and-access` for the Managed Identity and role model.
 - `bc-integrations` for the high-level architectural framing.

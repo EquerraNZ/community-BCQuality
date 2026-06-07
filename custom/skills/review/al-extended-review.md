@@ -68,12 +68,12 @@ Output conforms to the DO output contract, extended with `sub-results` (one comp
   },
   "findings": [
     {
-      "id": "custom/knowledge/integration/never-call-external-services-from-posting.md",
+      "id": "custom/knowledge/integration/al-never-call-external-services-from-posting.md",
       "severity": "major",
       "message": "HttpClient.Send is called from an OnAfterPostSalesDoc subscriber. Posting locks are held; stage the call on the Integration Message and let the Job Queue send it.",
       "location": { "file": "src/Integration/PostHooks.Codeunit.al", "line": 42 },
       "references": [
-        { "path": "custom/knowledge/integration/never-call-external-services-from-posting.md" }
+        { "path": "custom/knowledge/integration/al-never-call-external-services-from-posting.md" }
       ],
       "confidence": "high",
       "from-sub-skill": "al-integration-pattern-reviewer"

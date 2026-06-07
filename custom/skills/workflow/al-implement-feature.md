@@ -1,6 +1,6 @@
 ---
 kind: task-skill
-id: implement-feature
+id: al-implement-feature
 version: 1
 title: Implement a feature from its spec
 description: Implement a Business Central feature from its approved spec.md, plan.md, and tasks.md, applying the house rules and BCQuality, then run the mandatory verifier agents, fix findings, and update docs. Use as the final step of the Spec-Driven Development loop for a feature.
@@ -18,7 +18,7 @@ Execute an approved plan. The spec is the brain; here the agent is the muscle. S
 ## Preconditions
 
 `specs/features/<id>/spec.md`, `plan.md`, and `tasks.md` exist and are approved.
-If not, run `/spec-feature` then `/plan-feature` first. Do not write production AL
+If not, run `/al-spec-feature` then `/al-plan-feature` first. Do not write production AL
 without an approved plan.
 
 ## Steps
@@ -53,4 +53,4 @@ BCQuality citations, updated docs, and a roadmap item marked done.
 ## Related
 
 - The verifier agents and `bcquality-integration` (the citation contract).
-- `appsource-validation` before an AppSource submission.
+- `al-appsource-validation` before an AppSource submission.

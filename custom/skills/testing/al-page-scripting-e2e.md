@@ -1,6 +1,6 @@
 ---
 kind: task-skill
-id: page-scripting-e2e
+id: al-page-scripting-e2e
 version: 1
 title: Plan and replay BC Page Scripting e2e tests
 description: Plan, record, and repeatably replay Business Central Page Scripting (.yml) end-to-end tests for the UI behaviour that AL TestPage codeunits cannot reach (notification toasts, cue rendering, dialog visibility refresh, factbox refresh, real posting flows). Decides what belongs in Page Scripting versus an AL test, produces a deterministic recording plan a human follows, and wires the recordings into the e2e-replay (bc-replay) harness so the whole set re-runs from one command or VS Code task. Use after the AL TestPage suite is green and you need durable coverage of the rendered-UI residue, or before a release that touched UX.
