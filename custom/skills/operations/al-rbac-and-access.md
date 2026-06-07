@@ -1,6 +1,6 @@
 ---
 kind: action-skill
-id: rbac-and-access
+id: al-rbac-and-access
 version: 1
 title: Azure RBAC and Access Review
 description: Reviews Azure role-based access control configuration against the least-privilege model and emits a findings report.
@@ -65,7 +65,7 @@ Output conforms to the DO output contract. A populated example:
 
 ```json
 {
-  "skill": { "id": "rbac-and-access", "version": 1 },
+  "skill": { "id": "al-rbac-and-access", "version": 1 },
   "outcome": "completed",
   "summary": {
     "counts": { "blocker": 0, "major": 1, "minor": 1, "info": 0 },

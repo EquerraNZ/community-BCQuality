@@ -1,6 +1,6 @@
 ---
 kind: action-skill
-id: troubleshooting-mcp-server
+id: al-troubleshooting-mcp-server
 version: 1
 title: Troubleshooting MCP Server Usage Review
 description: Reviews how the Troubleshooting MCP Server is used to inspect the AL runtime during a debug session and emits a findings report.
@@ -20,7 +20,7 @@ An orchestrator invokes this skill with a `pr-diff` (a change to debugging docum
 
 ## Source
 
-The rule set is the Troubleshooting MCP Server usage guidance: when to use it versus the regular debugger, its prerequisites, the four tools Copilot can call, what it surfaces, and its hard limits. BCQuality's curated knowledge domains do not cover the debugging MCP surface, so this skill carries its own rule set in full. Read the BCQuality knowledge index once to confirm no curated domain claims this area (the `knowledge-index.json` Entry's preparation step regenerates over the already-filtered clone); do not open individual article bodies. Findings here are agent findings within this skill's debug-tooling domain. AL standards that Copilot's suggestions should align with are owned by `al-code-review`; performance-side triage is owned by `performance-profiler`.
+The rule set is the Troubleshooting MCP Server usage guidance: when to use it versus the regular debugger, its prerequisites, the four tools Copilot can call, what it surfaces, and its hard limits. BCQuality's curated knowledge domains do not cover the debugging MCP surface, so this skill carries its own rule set in full. Read the BCQuality knowledge index once to confirm no curated domain claims this area (the `knowledge-index.json` Entry's preparation step regenerates over the already-filtered clone); do not open individual article bodies. Findings here are agent findings within this skill's debug-tooling domain. AL standards that Copilot's suggestions should align with are owned by `al-code-review`; performance-side triage is owned by `al-performance-profiler`.
 
 ## Relevance
 
@@ -65,7 +65,7 @@ Output conforms to the DO output contract. A populated example:
 
 ```json
 {
-  "skill": { "id": "troubleshooting-mcp-server", "version": 1 },
+  "skill": { "id": "al-troubleshooting-mcp-server", "version": 1 },
   "outcome": "completed",
   "summary": {
     "counts": { "blocker": 0, "major": 1, "minor": 1, "info": 0 },

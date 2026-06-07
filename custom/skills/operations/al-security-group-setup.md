@@ -1,6 +1,6 @@
 ---
 kind: action-skill
-id: security-group-setup
+id: al-security-group-setup
 version: 1
 title: BC Environment Security Group Review
 description: Reviews how a Business Central environment is restricted with a Microsoft Entra security group and emits a findings report.
@@ -20,7 +20,7 @@ An orchestrator invokes this skill with a `repository` (an audit of environment-
 
 ## Source
 
-The rule set is the BC Entra security-group setup procedure: group creation conventions, environment binding, verification, and ongoing operational guidance. BCQuality's curated knowledge domains do not cover environment access control, so this skill carries its own rule set in full. Read the BCQuality knowledge index once to confirm no curated domain claims this area (the `knowledge-index.json` Entry's preparation step regenerates over the already-filtered clone); do not open individual article bodies. Findings here are agent findings within this skill's environment-access domain. The broader Azure access model is owned by `rbac-and-access`; restricting access during a restore window is the typical caller via `saas-restore-runbook`.
+The rule set is the BC Entra security-group setup procedure: group creation conventions, environment binding, verification, and ongoing operational guidance. BCQuality's curated knowledge domains do not cover environment access control, so this skill carries its own rule set in full. Read the BCQuality knowledge index once to confirm no curated domain claims this area (the `knowledge-index.json` Entry's preparation step regenerates over the already-filtered clone); do not open individual article bodies. Findings here are agent findings within this skill's environment-access domain. The broader Azure access model is owned by `al-rbac-and-access`; restricting access during a restore window is the typical caller via `al-saas-restore-runbook`.
 
 ## Relevance
 
@@ -65,7 +65,7 @@ Output conforms to the DO output contract. A populated example:
 
 ```json
 {
-  "skill": { "id": "security-group-setup", "version": 1 },
+  "skill": { "id": "al-security-group-setup", "version": 1 },
   "outcome": "completed",
   "summary": {
     "counts": { "blocker": 0, "major": 1, "minor": 1, "info": 0 },

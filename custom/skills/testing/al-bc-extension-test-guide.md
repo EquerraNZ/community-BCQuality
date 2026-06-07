@@ -1,6 +1,6 @@
 ---
 kind: action-skill
-id: bc-extension-test-guide
+id: al-bc-extension-test-guide
 version: 1
 title: BC Extension Test Guide Audit
 description: Reviews a Business Central extension's QA test guide for exhaustive category coverage of every page, field, relation, state, and permission in the AL source, and emits a findings report.
@@ -75,7 +75,7 @@ Output conforms to the DO output contract. A populated example:
 
 ```json
 {
-  "skill": { "id": "bc-extension-test-guide", "version": 1 },
+  "skill": { "id": "al-bc-extension-test-guide", "version": 1 },
   "outcome": "completed",
   "summary": {
     "counts": { "blocker": 0, "major": 2, "minor": 0, "info": 0 },

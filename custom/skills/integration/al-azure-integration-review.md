@@ -1,6 +1,6 @@
 ---
 kind: action-skill
-id: azure-integration-review
+id: al-azure-integration-review
 version: 1
 title: Azure Integration Plane Review
 description: Reviews the Azure integration plane that sits between Business Central and external systems and emits a findings report.
@@ -82,7 +82,7 @@ For each worklist item, evaluate the artifact and emit findings. The citable rul
 ### Security and configuration
 
 13. **`house:az-secrets-in-keyvault`** External credentials and connection strings live in Key Vault (referenced via Managed Identity), not inline in Bicep parameters, app settings literals, or Logic App connection definitions.
-14. **`house:az-managed-identity`** Plane-to-BC and plane-to-Azure-resource auth uses Managed Identity where the service supports it, not a static key or connection string. See `rbac-and-access` for the role model.
+14. **`house:az-managed-identity`** Plane-to-BC and plane-to-Azure-resource auth uses Managed Identity where the service supports it, not a static key or connection string. See `al-rbac-and-access` for the role model.
 15. **`house:az-https-only`** Receivers and Function apps enforce HTTPS only and a current TLS minimum. APIM exposes the receiver, the Function is not public where APIM is the intended front door.
 
 ### Cross-checks with the BC side
@@ -106,7 +106,7 @@ Output conforms to the DO output contract. A populated example:
 
 ```json
 {
-  "skill": { "id": "azure-integration-review", "version": 1 },
+  "skill": { "id": "al-azure-integration-review", "version": 1 },
   "outcome": "completed",
   "summary": {
     "counts": { "blocker": 1, "major": 1, "minor": 0, "info": 0 },

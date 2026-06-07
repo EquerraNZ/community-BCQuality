@@ -1,6 +1,6 @@
 ---
 kind: action-skill
-id: bc-integrations
+id: al-bc-integrations
 version: 1
 title: BC Integration Architecture Review
 description: Reviews how a Business Central extension integrates with external systems against architectural patterns and anti-patterns, and emits a findings report.
@@ -14,7 +14,7 @@ application-area: [all]
 
 # BC Integration Architecture Review
 
-Reviews the architecture of any integration between Business Central and an external system (Shopify, 3PL, WMS, custom services, partner platforms) and emits a findings report. It checks the high-level choices: middleware versus direct API, inbound publisher patterns, outbound business events, idempotency, sync direction, and error escalation. This is a leaf action skill: it invokes no sub-skills. For the detailed BC-side house rules it pairs with `al-modern-integration-patterns`, and for the Azure plane with `azure-integration-review`.
+Reviews the architecture of any integration between Business Central and an external system (Shopify, 3PL, WMS, custom services, partner platforms) and emits a findings report. It checks the high-level choices: middleware versus direct API, inbound publisher patterns, outbound business events, idempotency, sync direction, and error escalation. This is a leaf action skill: it invokes no sub-skills. For the detailed BC-side house rules it pairs with `al-modern-integration-patterns`, and for the Azure plane with `al-azure-integration-review`.
 
 An orchestrator invokes this skill with either a `pr-diff` (the standard PR-review entry point) or a `file-path` (single-file review of an integration object). The skill produces a single JSON document conforming to the DO output contract.
 
@@ -77,7 +77,7 @@ Output conforms to the DO output contract. A populated example:
 
 ```json
 {
-  "skill": { "id": "bc-integrations", "version": 1 },
+  "skill": { "id": "al-bc-integrations", "version": 1 },
   "outcome": "completed",
   "summary": {
     "counts": { "blocker": 1, "major": 1, "minor": 0, "info": 0 },

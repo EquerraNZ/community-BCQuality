@@ -1,6 +1,6 @@
 ---
 kind: action-skill
-id: copilot-capability-implementation
+id: al-copilot-capability-implementation
 version: 1
 title: BC Copilot Capability Implementation Review
 description: Reviews the AL implementation of a Business Central Copilot capability built on the System.AI Azure OpenAI module and emits a findings report.
@@ -82,7 +82,7 @@ Output conforms to the DO output contract. A populated example:
 
 ```json
 {
-  "skill": { "id": "copilot-capability-implementation", "version": 1 },
+  "skill": { "id": "al-copilot-capability-implementation", "version": 1 },
   "outcome": "completed",
   "summary": {
     "counts": { "blocker": 1, "major": 1, "minor": 0, "info": 0 },

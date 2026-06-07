@@ -14,13 +14,13 @@ application-area: [all]
 
 # Modern BC Integration Patterns Review
 
-Reviews any Business Central integration that crosses the BC boundary (pulling orders from a storefront, pushing shipments to a WMS, calling a payment provider, handling a long-running external process that answers hours later) and emits a findings report. This is the canonical rule set distilled from the BCTechDays 2026 "Modern Integrations" session. This is a leaf action skill: it invokes no sub-skills. For the Azure-plane side of the same flows the orchestrator pairs it with `azure-integration-review`; for the broad architectural framing, with `bc-integrations`.
+Reviews any Business Central integration that crosses the BC boundary (pulling orders from a storefront, pushing shipments to a WMS, calling a payment provider, handling a long-running external process that answers hours later) and emits a findings report. This is the canonical rule set distilled from the BCTechDays 2026 "Modern Integrations" session. This is a leaf action skill: it invokes no sub-skills. For the Azure-plane side of the same flows the orchestrator pairs it with `al-azure-integration-review`; for the broad architectural framing, with `al-bc-integrations`.
 
 An orchestrator invokes this skill with either a `pr-diff` (the standard PR-review entry point) or a `file-path` (single-file review). The skill produces a single JSON document conforming to the DO output contract.
 
 ## Source
 
-The rule set is the modern-integration house rules below, plus the `integration` knowledge domain in BCQuality where a deck anti-pattern maps onto a curated rule. Read the BCQuality knowledge index once and take the `integration` domain entries (and the `performance` and `security` entries named in the overlap table) as the citable candidate set across every enabled layer; do not open an article's body until it enters the Worklist. The house rules the corpus does not vendor are emitted as `house:<slug>` with empty `references[]`. See `bcquality-integration` for the citation contract.
+The rule set is the modern-integration house rules below, plus the `integration` knowledge domain in BCQuality where a deck anti-pattern maps onto a curated rule. Read the BCQuality knowledge index once and take the `integration` domain entries (and the `performance` and `security` entries named in the overlap table) as the citable candidate set across every enabled layer; do not open an article's body until it enters the Worklist. The house rules the corpus does not vendor are emitted as `house:<slug>` with empty `references[]`. See `al-bcquality-integration` for the citation contract.
 
 ## Relevance
 
