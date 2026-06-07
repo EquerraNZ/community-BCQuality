@@ -50,7 +50,7 @@ Generation is **owned by BCQuality**: the generator ships here next to the skill
 
 ## Source
 
-All action skills under `*/skills/**/*.md` across the layers named in `enabled-layers`. Meta-skills in `/skills/` (including this file) are not candidates and MUST be excluded. Entry never dispatches Entry.
+All action skills under `*/skills/**/*.md` across the layers named in `enabled-layers`. Meta-skills in `/skills/` (including this file) are not candidates and MUST be excluded. Entry never dispatches Entry. Task skills (`kind: task-skill`, see `skills/task.md`) also live under `*/skills/**/*.md` but are not dispatch candidates: they are invoked directly, and the Relevance step's `kind: action-skill` condition excludes them.
 
 ## Relevance
 

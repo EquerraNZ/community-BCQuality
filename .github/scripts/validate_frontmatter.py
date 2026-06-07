@@ -40,6 +40,13 @@ ACTION_SKILL_REQUIRED_KEYS = {
 ACTION_SKILL_OPTIONAL_KEYS = {
     "bc-version", "technologies", "countries", "application-area", "sub-skills",
 }
+TASK_SKILL_REQUIRED_KEYS = {
+    "kind", "id", "version", "title", "description",
+}
+TASK_SKILL_OPTIONAL_KEYS = {
+    "bc-version", "technologies", "countries", "application-area",
+    "produces", "references",
+}
 META_SKILL_REQUIRED_KEYS = {"kind", "id", "version", "title"}
 ENTRY_SKILL_REQUIRED_KEYS = {"kind", "id", "version", "title"}
 
@@ -52,7 +59,7 @@ VALID_SAMPLE_KINDS = {"good", "bad"}
 ACTION_SKILL_SECTIONS = ["Source", "Relevance", "Worklist", "Action", "Output"]
 
 LAYERS = ("microsoft", "community", "custom")
-META_SKILL_FILES = {"read.md", "write.md", "do.md"}
+META_SKILL_FILES = {"read.md", "write.md", "do.md", "task.md"}
 ENTRY_SKILL_FILE = "entry.md"
 
 MAX_KNOWLEDGE_LINES = 100
@@ -384,6 +391,80 @@ def validate_action_skill(path: Path, parsed: Parsed, report: Report) -> None:
         report.error(path, "R21", f"required sections out of order: {order}; expected {ACTION_SKILL_SECTIONS}")
 
 
+def validate_task_skill(path: Path, parsed: Parsed, report: Report) -> None:
+    if parsed.frontmatter_error:
+        report.error(path, "R01", parsed.frontmatter_error, 1)
+        return
+    fm = parsed.frontmatter
+    assert fm is not None
+
+    # R26 required keys; warn on unknown
+    missing = TASK_SKILL_REQUIRED_KEYS - fm.keys()
+    if missing:
+        report.error(path, "R26", f"missing required task-skill keys: {sorted(missing)}", 1)
+    unknown = fm.keys() - TASK_SKILL_REQUIRED_KEYS - TASK_SKILL_OPTIONAL_KEYS
+    if unknown:
+        report.warn(path, "R26", f"unknown task-skill keys: {sorted(unknown)}", 1)
+    for k in TASK_SKILL_REQUIRED_KEYS & fm.keys():
+        v = fm[k]
+        if v is None or v == "" or v == []:
+            report.error(path, "R26", f"task-skill key '{k}' must not be empty", 1)
+
+    # R25 kind matches path
+    if fm.get("kind") != "task-skill":
+        report.error(path, "R25", f"file is a task skill by kind but kind is '{fm.get('kind')}', expected 'task-skill'", 1)
+
+    # R16 id kebab-case, version positive int
+    if "id" in fm:
+        if not isinstance(fm["id"], str) or not KEBAB_CASE.match(fm["id"]):
+            report.error(path, "R16", f"id must be lowercase kebab-case: '{fm['id']}'", 1)
+    if "version" in fm:
+        v = fm["version"]
+        if not isinstance(v, int) or isinstance(v, bool) or v <= 0:
+            report.error(path, "R16", f"version must be a positive integer: {v!r}", 1)
+
+    # R19 optional filter dimensions, if present (same semantics as action skills)
+    if "bc-version" in fm:
+        _, err = expand_bc_version(fm["bc-version"])
+        if err:
+            report.error(path, "R19", f"bc-version: {err}", 1)
+    if "technologies" in fm:
+        t = fm["technologies"]
+        if not is_non_empty_list_of_str(t):
+            report.error(path, "R19", "technologies must be a non-empty list of strings", 1)
+        elif "all" in t:
+            report.error(path, "R19", "technologies must not use the 'all' sentinel", 1)
+    if "countries" in fm:
+        c = fm["countries"]
+        if not is_non_empty_list_of_str(c):
+            report.error(path, "R19", "countries must be a non-empty list of strings", 1)
+        elif "w1" in c and len(c) > 1:
+            report.error(path, "R19", "'w1' is mutually exclusive with country codes", 1)
+        elif "w1" not in c:
+            bad = [x for x in c if not ISO_ALPHA2.match(x)]
+            if bad:
+                report.error(path, "R19", f"countries must be ISO alpha-2 or [w1]: {bad}", 1)
+    if "application-area" in fm:
+        a = fm["application-area"]
+        if not is_non_empty_list_of_str(a):
+            report.error(path, "R19", "application-area must be a non-empty list of strings", 1)
+        elif "all" in a and len(a) > 1:
+            report.error(path, "R19", "'all' is mutually exclusive with specific application areas", 1)
+
+    # R27 produces / references shapes
+    if "produces" in fm:
+        if not is_non_empty_list_of_str(fm["produces"]):
+            report.error(path, "R27", "produces must be a non-empty list of strings", 1)
+    if "references" in fm:
+        r = fm["references"]
+        if not is_non_empty_list_of_str(r):
+            report.error(path, "R27", "references must be a non-empty list of repo-relative paths", 1)
+        else:
+            bad = [x for x in r if not x.endswith(".md")]
+            if bad:
+                report.error(path, "R27", f"references entries must end in '.md': {bad}", 1)
+
+
 def validate_meta_skill(path: Path, parsed: Parsed, report: Report) -> None:
     if parsed.frontmatter_error:
         report.error(path, "R01", parsed.frontmatter_error, 1)
@@ -433,7 +514,11 @@ def validate_entry_skill(path: Path, parsed: Parsed, report: Report) -> None:
 # --- Path and sample checks -------------------------------------------------
 
 def classify(path_from_root: Path) -> str | None:
-    """Return 'knowledge' | 'action-skill' | 'meta' | 'entry' | None."""
+    """Return 'knowledge' | 'layer-skill' | 'meta' | 'entry' | None.
+
+    'layer-skill' is any markdown skill file under a layer's skills/ folder; the
+    concrete kind (action-skill vs task-skill) is resolved from its frontmatter.
+    """
     parts = path_from_root.parts
     if len(parts) < 2:
         return None
@@ -447,8 +532,15 @@ def classify(path_from_root: Path) -> str | None:
                 return "meta"
         return None
     if top in LAYERS and path_from_root.suffix == ".md":
-        if len(parts) >= 3 and parts[1] == "skills":
-            return "action-skill"
+        if parts[1] == "skills":
+            # Skill files live at <layer>/skills/<slug>.md or
+            # <layer>/skills/<category>/<slug>.md. Anything deeper (e.g. an
+            # examples/ asset dir) is supporting material, not a skill.
+            if "examples" in parts:
+                return None
+            if len(parts) in (3, 4):
+                return "layer-skill"
+            return None
         if len(parts) >= 4 and parts[1] == "knowledge":
             return "knowledge"
     return None
@@ -525,10 +617,16 @@ def run(root: Path) -> Report:
         if kind == "knowledge":
             validate_knowledge_path(path, root, report)
             validate_knowledge(path, parsed, report)
-        elif kind == "action-skill":
-            validate_action_skill(path, parsed, report)
+        elif kind == "layer-skill":
+            fm_kind = parsed.frontmatter.get("kind") if parsed.frontmatter else None
+            if fm_kind == "task-skill":
+                validate_task_skill(path, parsed, report)
+                rec_kind = "task-skill"
+            else:
+                validate_action_skill(path, parsed, report)
+                rec_kind = "action-skill"
             if parsed.frontmatter and isinstance(parsed.frontmatter.get("id"), str):
-                skill_records.append(SkillRecord(path, "action-skill", parsed.frontmatter["id"]))
+                skill_records.append(SkillRecord(path, rec_kind, parsed.frontmatter["id"]))
         elif kind == "meta":
             validate_meta_skill(path, parsed, report)
             if parsed.frontmatter and isinstance(parsed.frontmatter.get("id"), str):
