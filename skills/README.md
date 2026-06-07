@@ -3,7 +3,7 @@
 This folder contains the skills that are not owned by any single layer. There are two kinds:
 
 - **The entry-point skill** — the first skill an agent invokes at runtime.
-- **The three meta-skill contracts** — stable references that define what the rest of BCQuality means.
+- **The four meta-skill contracts** — stable references that define what the rest of BCQuality means.
 
 ## The entry-point skill
 
@@ -19,9 +19,10 @@ Routing logic lives in Entry, not in the orchestrator. An agent that knows only 
 |---|---|---|---|
 | 1 | [`read.md`](read.md) | **READ** — Schema + Use. How to read a knowledge file: frontmatter fields, section semantics, matching rules, layer precedence, conflict resolution. | Any agent or action skill that consumes knowledge files. |
 | 2 | [`do.md`](do.md) | **DO** — Action Skill contract. The Source → Relevance → Worklist → Action template and the structured output every action skill produces. Includes super-skill composition. | Any agent invoking an action skill; every action-skill author. |
-| 3 | [`write.md`](write.md) | **WRITE** — New Knowledge. Authoring rules for knowledge files. Defers to `read.md` for the schema. | Contributors (human or agent) adding or editing knowledge files. Not used during consumption. |
+| 3 | [`task.md`](task.md) | **TASK**: Task Skill contract. The template every operational/generative skill follows (`kind: task-skill`): performs work and produces an artifact rather than emitting findings. Invoked directly, not routed by Entry. | Any agent invoking a task skill; every task-skill author. |
+| 4 | [`write.md`](write.md) | **WRITE** — New Knowledge. Authoring rules for knowledge files. Defers to `read.md` for the schema. | Contributors (human or agent) adding or editing knowledge files. Not used during consumption. |
 
-READ and DO are read on demand — typically by the first action skill the agent executes after dispatch. They are not prerequisites for invoking Entry. WRITE is only used when scaffolding new content.
+READ and DO are read on demand — typically by the first action skill the agent executes after dispatch. They are not prerequisites for invoking Entry. TASK is read by an agent invoking a task skill, and by task-skill authors. WRITE is only used when scaffolding new content.
 
 These contracts are stable. Changes require a PR approved by both maintainers.
 

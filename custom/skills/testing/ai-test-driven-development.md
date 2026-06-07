@@ -1,90 +1,322 @@
 ---
-kind: action-skill
+kind: task-skill
 id: ai-test-driven-development
 version: 1
-title: AI test-driven development
-description: TDD for Copilot features and custom agents covering Evaluation suites, JSONL/YAML datasets, AITest codeunits, agent turn loops, intervention validation, and credit tracking.
-inputs: [repository, file-path]
-outputs: [findings-report]
+title: Test-driven development for BC Copilot and agents
+description: Test-driven development for Business Central Copilot features and custom agents. Covers the Evaluation suite, JSONL and YAML datasets, the AITest codeunit pattern, agent turn loops, intervention validation, and Copilot credit tracking.
 bc-version: [all]
 technologies: [al]
 countries: [w1]
 application-area: [all]
 ---
 
-# AI test-driven development
+# AI Test-Driven Development for AL
 
-Drives test-driven development for Business Central Copilot features and custom agents using the Evaluation suite (the data-driven tool where datasets describe inputs and expected outputs and the test codeunit drives the loop). It covers two flows: prompt-based AI tests for PromptDialog features (JSONL or YAML datasets) and multi-turn agent accuracy tests with intervention validation (YAML only). This is a generator-style skill: it generates AITest codeunits, dataset scaffolds, and suite XML as findings whose `suggested-code` carries the artifact, and it also reviews an existing AI test setup for misconfiguration. This is a leaf action skill: it invokes no sub-skills.
+How to test Copilot features and agents in Business Central. Uses the Evaluation tool (formerly "AI Test Toolkit"), which is data-driven: datasets describe inputs and expected outputs, the test codeunit drives the loop.
 
-An orchestrator invokes this skill with a `repository` (the Copilot or agent extension and its test app) and a `file-path` (the capability, PromptDialog, or agent under test, or an existing AI test codeunit or dataset to review). It produces a single JSON document conforming to the DO output contract.
+## When to use
 
-## Source
+- Building a new Copilot feature (PromptDialog) and want a regression suite
+- Building a custom agent and want repeatable accuracy tests
+- Reviewing a PR that changes prompts, metaprompts, or agent instructions
+- Comparing two model versions (A/B) on the same dataset
+- Measuring Copilot credit consumption per dataset entry
 
-Read the BCQuality knowledge index once (the `knowledge-index.json` Entry's preparation step regenerates over the live, already-filtered clone). Take the index entries whose `domain` is `testing` as the citable candidate set across every enabled layer: AITest-codeunit attribute rules, isolation rules (`TestType = AITest`, `RequiredTestIsolation = Disabled` for agent tests), suite-setup discipline, intervention-contract rules, and credit-tracking guidance back the findings here. Do not open individual article files at this step; open an article's full body only once it enters the Worklist below. Generated artifacts and configuration observations with no curated backing are agent findings within this skill's domain (see Action).
+## Two test flows
 
-## Relevance
+| Flow | Use for | Format |
+|---|---|---|
+| **AI test** | Prompt-based Copilot features (PromptDialog + AOAI call) | JSONL or YAML |
+| **Agent test** | Multi-turn custom agents with intervention | YAML only |
 
-Apply the frontmatter matching rules defined in READ against the task context:
+Both use the same Evaluation suite UI and runner. Differences come down to dataset shape and the codeunit's `TestType`.
 
-- `bc-version`: the target BC version from the repository `app.json`, or `unknown` if unavailable.
-- `technologies`: `[al]`.
-- `countries`: the consuming app's declared countries, or `unknown` (the suite XML may enable multilingual evaluation, so countries can matter).
-- `application-area`: the application areas of the Copilot or agent feature, or `unknown`.
+## Test codeunit attributes
 
-Discard files that are not applicable. Retain conditionally applicable files (any dimension `unknown`) only when configuration permits; findings derived from them have `confidence` no higher than `medium`, and the finding `message` names the unknown dimensions.
+For an agent test, use:
 
-## Worklist
-
-Narrow to the AI test work the task requires:
-
-- The flow: prompt-based AI test (PromptDialog plus an Azure OpenAI call, JSONL or YAML dataset) or agent accuracy test (multi-turn, YAML only).
-- The AITest codeunit: `Subtype = Test`, `TestType = AITest`, `TestPermissions = Disabled`, and for agent tests `RequiredTestIsolation = Disabled` (essential, because agent tasks run in a different session and span transactions).
-- The turn loop for agent tests: the `repeat ... until` delegating to `Library - Agent` (`RunTurnAndWait`, `FinalizeTurn`), with validators returning `false` and a populated `ErrorReason` rather than calling `Error()`.
-- The dataset: `test_setup` and `expected_data` keys for AI tests; `turns:` with `query`/`expected_data` for agent tests; the `intervention_request` sub-key the framework reads automatically (both directions: a declared intervention must pause with matching type and suggestions, an undeclared one must not pause); `$DateFormula-<...>$` placeholders, always quoted.
-- The suite XML: `TestRunnerId="130451"` (Isolation-Disabled runner, required for agent tests), `TestType="Agent"` versus `"AITest"`, `<Language>` children, and the install-time dataset load.
-- Suite-setup discipline: `AITTestContext.IsSuiteSetupDone()` is sticky; re-running setup needs the Reset Suite Setup action.
-- Credit and permission constraints: Evaluation runs consume Copilot credits (tracked per suite, per line, per entry; limited at environment and company level); users need the `AI TEST TOOLKIT` permission set.
-
-A curated `testing` file enters the worklist when its `keywords` intersect these tokens. Read its full body only after it makes the worklist. Resolve layer-precedence conflicts per READ and record dropped files in `suppressed`.
-
-## Action
-
-When generating, emit one finding per generated artifact (the AITest codeunit, the dataset, the suite XML, the install codeunit), each carrying the artifact in `suggested-code` with a `message` stating what was generated and how to wire it. When reviewing an existing setup, emit a finding per defect: a missing `RequiredTestIsolation = Disabled` on an agent test, a wrong `TestRunnerId`, a validator calling `Error()` instead of returning `ErrorReason`, an unquoted date placeholder, an intervention contract the dataset does not exercise in both directions, or a sticky suite-setup that silently ignores edited setup YAML. Where a curated `testing` file states the rule, emit a knowledge-backed finding citing it: `id` equal to the file path, `severity` up to `major` (`blocker` only when the file states a platform-level guarantee, for example an isolation rule whose violation makes the agent runner unusable), `confidence` `high` for an unambiguous match. Where no curated file applies, emit an agent finding within this skill's domain: `references: []`, `id` slug prefixed `agent:` (for example `agent:generated-aitest-codeunit`, `agent:missing-disabled-isolation`, `agent:unquoted-date-placeholder`), `confidence` capped at `medium`, `severity` capped at `minor`, self-contained `message`. Put generated AL, YAML, or XML in `suggested-code`; for a mechanical fix to an existing file (adding the isolation attribute, quoting a placeholder) also set `suggested-code`. Where the fix is not local (restructuring a turn loop), set `suggested-code-omission-reason`. Hold every agent finding to the precision bar in `skills/do.md`.
-
-Outcome selection: `completed` when the requested generation or review finished (including a clean review with empty `findings`); `not-applicable` when the repository has no Copilot capability, PromptDialog, or custom agent to test; `no-knowledge` when no curated knowledge survived and no agent finding was raised; `partial` or `failed` per the DO contract with `outcome-reason`.
-
-## Output
-
-Output conforms to the DO output contract. Generated artifacts and configuration findings with no curated backing are agent findings (`references: []`, `agent:` id, severity capped at `minor`); findings citing a `testing` file carry that file path as `id` and primary reference.
-
-```json
+```al
+codeunit 50200 "My Agent Accuracy Test"
 {
-  "skill": { "id": "ai-test-driven-development", "version": 1 },
-  "outcome": "completed",
-  "summary": {
-    "counts": { "blocker": 0, "major": 1, "minor": 1, "info": 0 },
-    "coverage": { "worklist-size": 3, "items-evaluated": 3 }
-  },
-  "findings": [
-    {
-      "id": "agent:missing-disabled-isolation",
-      "severity": "minor",
-      "message": "Agent accuracy codeunit 50202 sets TestType = AITest but not RequiredTestIsolation = Disabled. Impact is major: agent tasks run in a different session and span transactions, so the runner cannot enforce isolation and the suite fails to start. Add the attribute. Promote to a curated rule so it can gate.",
-      "location": { "file": "test/MyAgentAccuracyTest.Codeunit.al", "line": 4 },
-      "references": [],
-      "confidence": "medium",
-      "suggested-code": "    RequiredTestIsolation = Disabled;"
-    },
-    {
-      "id": "agent:generated-agent-dataset",
-      "severity": "info",
-      "message": "Generated a YAML agent dataset with a turns chain and an intervention_request the FinalizeTurn contract enforces in both directions. Date values use quoted $DateFormula placeholders so the dataset does not drift against WorkDate. Ship it under the test app .resources/ folder and load it in an Install codeunit.",
-      "location": { "file": "test/.resources/datasets/MY-DATASET.yaml" },
-      "references": [],
-      "confidence": "medium",
-      "suggested-code": "name: MY-DATASET\nsuite_setup: MY-AGENT\ntests:\n  - turns:\n      - query:\n          message: \"Release all open sales orders for next week\"\n        expected_data:\n          orders_released: 2"
-    }
-  ],
-  "suppressed": []
+    Subtype = Test;
+    TestType = AITest;
+    TestPermissions = Disabled;
+    RequiredTestIsolation = Disabled;
 }
 ```
+
+`RequiredTestIsolation = Disabled` is essential. Agent tasks run in a different session and span transactions, so isolation cannot be enforced.
+
+For a prompt-only AI test, the codeunit still uses `TestType = AITest` but does not need the disabled isolation, because the test runs inline.
+
+## Required codeunits
+
+```
+codeunit "AIT Test Context"           # read dataset values
+codeunit "Library - Agent"            # turn dispatcher (agent tests only)
+codeunit "Library Assert"             # standard assertions
+codeunit "Test Input Json"            # parse per-turn setup data
+codeunit "Agent Task Builder"         # build agent tasks programmatically
+codeunit "Agent Task Message Builder" # build messages programmatically
+```
+
+## The agent test turn loop
+
+The recommended pattern: dataset describes the input and expected outcome, the test runs a `repeat ... until` loop delegating to `Library - Agent`.
+
+```al
+[Test]
+procedure RunAgentTurns()
+var
+    AITTestContext: Codeunit "AIT Test Context";
+    LibraryAgent: Codeunit "Library - Agent";
+    AgentTask: Record "Agent Task";
+    TurnSuccessful: Boolean;
+    ContinueWithNextTurn: Boolean;
+    ErrorReason: Text;
+begin
+    Initialize();   // resolve agent, clean up old tasks, activate
+
+    repeat
+        ApplyTurnSetup();   // optional: per-turn setup from dataset
+
+        TurnSuccessful := LibraryAgent.RunTurnAndWait(AgentUserSecurityId, AgentTask);
+        if TurnSuccessful then
+            TurnSuccessful := ValidateTurnCompletedSuccessfully(ErrorReason);
+
+        ContinueWithNextTurn := LibraryAgent.FinalizeTurn(AgentTask, TurnSuccessful, ErrorReason);
+    until not ContinueWithNextTurn;
+end;
+```
+
+Key calls:
+
+- `LibraryAgent.RunTurnAndWait(AgentUserSecurityId, var AgentTask): Boolean` reads the current turn's `query:` from the dataset, dispatches to the agent, waits for completion.
+- `LibraryAgent.FinalizeTurn(var AgentTask, TurnSuccessful, ErrorReason): Boolean` writes turn output, validates intervention contract, advances to next turn. Return value drives loop continuation.
+
+Validators should return `false` with a populated `ErrorReason` rather than calling `Error()`. That lets `FinalizeTurn` log the failure on the turn and optionally continue.
+
+## Initialize and agent resolution
+
+```al
+local procedure Initialize()
+var
+    LibraryAgent: Codeunit "Library - Agent";
+begin
+    if Initialized then exit;
+
+    AgentUserSecurityId := LibraryAgent.GetAgentUnderTest();
+    if IsNullGuid(AgentUserSecurityId) then
+        AgentUserSecurityId := GetOrCreateAgent();
+
+    LibraryAgent.StopTasks(AgentUserSecurityId);
+    LibraryAgent.EnsureAgentIsActive(AgentUserSecurityId);
+    Initialized := true;
+end;
+```
+
+`GetAgentUnderTest()` is optional. Use it when the evaluation suite should A/B test two agent versions against the same dataset. Skip it for tests that always run against one agent.
+
+## Dataset shapes
+
+### AI test dataset (JSONL or YAML)
+
+```yaml
+name: MARKETING-TEXT
+description: Marketing text generation accuracy tests.
+language: en-US
+tests:
+  - test_setup:
+      item_no: "C-10000"
+      description: "Contoso Coffee Machine"
+      uom: "PCS"
+    expected_data:
+      tagline_max_length: 20
+```
+
+`test_setup` and `expected_data` are conventional keys (the framework only enforces a few; you read the rest in your validator).
+
+### Agent test dataset (YAML)
+
+Agent datasets live under conventional folders (the names are convention, not enforced):
+
+```
+.resources/
+    suite_setup/<NAME>.yaml      # suite-level setup, declared once
+    datasets/<NAME>.yaml         # per-suite test cases
+    configuration/<NAME>.xml     # AI Eval Suite XML
+```
+
+Setup file:
+
+```yaml
+name: MY-AGENT
+suite_setup:
+  setup_actions:
+    - action_type: SeedCustomers
+      action_data:
+        count: 5
+```
+
+Dataset file (always uses `turns:` even for single-turn):
+
+```yaml
+name: MY-DATASET
+suite_setup: MY-AGENT
+language: en-US
+continue_on_failure: false
+tests:
+  - turns:
+      - query:
+          from: Jane Doe
+          title: "Release orders"
+          message: "Release all open sales orders for the next week"
+          attachments:
+            - file: invoices/inv-001.pdf
+        expected_data:
+          orders_released: 2
+```
+
+### Intervention validation (framework-recognised)
+
+`expected_data.intervention_request` is the only sub-key the framework reads automatically:
+
+```yaml
+expected_data:
+  intervention_request:
+    type: Assistance      # enum "Agent User Int Request Type" English name
+    suggestions: [PROVIDE_DATE]
+```
+
+`FinalizeTurn` enforces both directions:
+
+- If the turn declares `intervention_request`, the agent **must** pause with matching type and suggestions. Failure to pause = turn fails.
+- If the turn does **not** declare it, the agent **must not** pause. Unexpected pause = turn fails.
+
+### Continuing past an intervention
+
+A later turn can resume from the previous intervention via `query.intervention`:
+
+```yaml
+- query:
+    intervention:
+      suggestion: PROVIDE_DATE
+```
+
+Use either `suggestion` (resume one of the offered suggestions) or `instruction` (free-text override), not both.
+
+### Date placeholders
+
+`$DateFormula-<formula>$` resolves against `WorkDate` so tests do not drift.
+
+```yaml
+Shipment Date: "$DateFormula-<CW+1M>$"
+Posting Date: "$DateFormula-<CD>$"
+```
+
+Variants: `$DateTimeFormula-<formula>$`, `$DateTimeFormula-<formula>-HH:MM:SS$`, plus a milliseconds variant.
+
+**Always quote these strings** in YAML. The `< >` characters conflict with YAML flow syntax otherwise.
+
+## Suite XML
+
+Drives which tests in which languages on what cadence.
+
+```xml
+<AITSuite Code="MY-AGENT"
+          Description="My agent accuracy suite"
+          Dataset="MY-DATASET.YAML"
+          TestRunnerId="130451"
+          Capability="My Agent Capability"
+          Frequency="Daily"
+          TestType="Agent">
+  <Language Tag="en-US" Frequency="Daily"/>
+  <Language Tag="da-DK" Frequency="Weekly"/>
+  <Line CodeunitID="50200" Dataset="MY-DATASET.YAML"/>
+</AITSuite>
+```
+
+- `TestRunnerId="130451"` is `Test Runner - Isol. Disabled`, required for agent tests.
+- `TestType="Agent"` opts into the agent runner. Use `"AITest"` for prompt-only tests.
+- `<Language>` children enable multilingual evaluation.
+
+## Suite setup discipline
+
+`AITTestContext.IsSuiteSetupDone()` is **sticky** across runs. Once `SetEvalSuiteSetupCompleted()` is called, the suite skips setup on subsequent runs.
+
+To re-run setup (e.g. after editing the setup YAML), use the **Reset Suite Setup** action on the AI Eval Suite page. Otherwise the new setup is ignored.
+
+## Loading datasets at install time
+
+The convention is to ship datasets as test app `.resources/` files and load them in an Install codeunit:
+
+```al
+codeunit 50201 "My Agent Test Install"
+{
+    Subtype = Install;
+
+    trigger OnInstallAppPerDatabase()
+    var
+        AITALTestSuiteMgt: Codeunit "AIT AL Test Suite Mgt";
+        ResInStream: InStream;
+        ResourcePath: Text;
+    begin
+        foreach ResourcePath in NavApp.ListResources('*.yaml') do begin
+            NavApp.GetResource(ResourcePath, ResInStream);
+            AITALTestSuiteMgt.ImportTestInputs(ResourcePath, ResInStream);
+        end;
+        // and the suite XML
+    end;
+}
+```
+
+## Copilot credit tracking
+
+Evaluation runs **consume Copilot credits**. The runner tracks usage at three levels:
+
+- Per suite run
+- Per test line
+- Per dataset entry
+
+Use environments with prepaid Copilot credits, especially for automated runs.
+
+Credit limits are enforced at **two levels**:
+
+- Environment (all companies combined)
+- Company (per company)
+
+Either limit blocks new tasks. Running tasks complete to avoid wasted credits.
+
+For agent tests, the displayed token usage shows **AI evaluator tokens only**, not the agent's runtime tokens. Don't confuse the two when budgeting.
+
+## Access to results via API
+
+Page `149038` `AIT Log Entry API` exposes results programmatically. Useful for CI dashboards.
+
+## Sensitive datasets
+
+Toggle the `Sensitive` flag on a dataset to hide test input/output in views by default. Useful when the dataset contains PII or proprietary prompts.
+
+## Permissions
+
+Users running Evaluation need the `AI TEST TOOLKIT` permission set. Credit limit edits require the `agent admin` role.
+
+## BC-Bench (April 2026 GA)
+
+A SWE-Bench-style benchmark for AL bug fix and test creation tasks. Use it for comparing Copilot agent performance over time. Out of scope for project-specific tests but useful as the trust signal when evaluating agent providers.
+
+## Related skills
+
+- `ai-agent-sdk` for the AL APIs that define the agents under test
+- `ai-development-toolkit` for the design and Tasks API context
+- `copilot-promptdialog` for the UI under test
+- `copilot-capability-implementation` for the AL Copilot capability the tests evaluate
+
+## References
+
+- Evaluation: https://learn.microsoft.com/dynamics365/business-central/dev-itpro/developer/ai-test-copilot-testtool
+- Datasets: https://learn.microsoft.com/dynamics365/business-central/dev-itpro/developer/ai-test-copilot-datasets
+- Write agent tests: https://learn.microsoft.com/dynamics365/business-central/dev-itpro/developer/ai-test-copilot-agent-tests
+- BC-Bench (release plan): https://learn.microsoft.com/dynamics365/release-plan/2026wave1/smb/dynamics365-business-central/evaluate-al-coding-agents-bc-bench
+- BCApps AI Test Toolkit README: https://github.com/microsoft/BCApps/blob/main/src/Tools/AI%20Test%20Toolkit/README.md
+- BCTech SalesValidationAgent sample: https://github.com/microsoft/BCTech/tree/master/samples/BCAgents/SalesValidationAgent
