@@ -1,169 +1,107 @@
 ---
-kind: task-skill
+kind: action-skill
 id: ai-agent-sdk
 version: 1
-title: Define a custom BC agent with the AI Agent SDK
-description: Define and register a custom Business Central agent in AL using the IAgentFactory, IAgentMetadata, and IAgentTaskExecution interfaces. Use when authoring a new agent extension, wiring user intervention suggestions, or registering the paired Copilot capability.
+title: BC Agent SDK Definition Review
+description: Reviews AL source that defines and registers a custom Business Central agent with the AI Agent SDK and emits a findings report.
+inputs: [pr-diff, file-path]
+outputs: [findings-report]
 bc-version: [all]
 technologies: [al]
 countries: [w1]
 application-area: [all]
 ---
 
-# AI Agent SDK (define and register an agent in AL)
+# BC Agent SDK Definition Review
 
-How to define a custom Business Central agent programmatically in AL. Pairs with `ai-development-toolkit` (which covers the in-product design surface and Tasks AL API) and `ai-test-driven-development` (for evaluating the agent).
+Reviews AL source that defines and registers a custom Business Central agent through the AI Agent SDK (the `IAgentFactory`, `IAgentMetadata`, and `IAgentTaskExecution` triple-interface pattern, the `Agent Metadata Provider` enum extension, and the paired Copilot Capability registration) and emits a findings report. This is a leaf action skill: it invokes no sub-skills.
 
-Currently a **preview feature**. Preview supplemental terms apply.
+An orchestrator invokes this skill with either a `pr-diff` (the standard PR-review entry point for an agent extension change) or a `file-path` (single-file review of an agent factory, metadata, task-execution, or install codeunit). The skill produces a single JSON document conforming to the DO output contract. The Agent SDK is a preview feature, so the review treats preview-lifecycle gaps as real findings rather than ignoring them.
 
-## When to use
+## Source
 
-- Authoring a new BC agent extension
-- Adding a setup page, custom annotations, or intervention suggestions to an existing agent
-- Registering the paired Copilot Capability so the agent appears in the Copilot & agent capabilities page
-- Replacing a built-in agent's behaviour with a customer-tuned variant
+The rule set is this skill's own agent-definition knowledge plus any BCQuality knowledge entries whose domain covers the concerns it touches (style for labels and captions, security for permission and entitlement gates). Read the BCQuality knowledge index once (the `knowledge-index.json` regenerated at the root of the live, already-filtered clone) and take the `style` and `security` domain entries as the citable candidate set across every enabled layer. Do not open an individual article body at this step; open an article only once it enters the Worklist. The Agent SDK interface contract, the paired capability registration, and the BC 28.1+ permission model are not covered by the corpus; for a concrete violation there, emit an agent finding within this skill's agent-definition domain.
 
-## The triple-interface pattern
+## Relevance
 
-Every agent type plugs into three interfaces. Register them via an `enumextension` of `Agent Metadata Provider`:
+Apply the frontmatter matching rules defined in READ against the task context:
 
-```al
-enumextension 50100 "My Agent Provider" extends "Agent Metadata Provider"
+- `bc-version` - the target BC version from the consuming app's `app.json`, or `unknown` if unavailable. The permission default changes at BC 28.1, so this dimension is load-bearing.
+- `technologies` - `[al]`.
+- `countries` - the countries declared in the app's `app.json`; default to the orchestrator's configured context, else `unknown`.
+- `application-area` - the union of application areas declared by the changed objects; pass the actual set, do not substitute `[all]`.
+
+Discard files not applicable to AL agent extensions. Retain conditionally applicable rules (any dimension `unknown`) only when configuration permits; findings derived from them have `confidence` no higher than `medium` and name the unknown dimension in the `message`.
+
+## Worklist
+
+Narrow to the rules that apply to the agent definition under review. A rule enters the worklist when the diff or file touches its area:
+
+- **Provider registration** - an `enumextension` of `Agent Metadata Provider` wires all three interfaces (`IAgentFactory`, `IAgentMetadata`, `IAgentTaskExecution`) onto each agent value.
+- **`IAgentFactory`** - `GetFirstTimeSetupPageId` returns a page whose source table holds a `User Security ID : Guid` field; `ShowCanCreateAgent` gates correctly; `GetDefaultProfile` and `GetDefaultAccessControls` are provided.
+- **`IAgentMetadata`** - `GetSetupPageId`, `GetAgentTaskMessagePageId`, `GetAgentAnnotations`, and `GetSummaryPageId` are implemented; the summary page stays a focused numeric KPI view.
+- **`IAgentTaskExecution`** - `AnalyzeAgentTaskMessage` mutates only `Type::Output`; text is changed via `codeunit "Agent Message".UpdateText`; `Severity::Error` versus `Severity::Warning` is chosen deliberately; `GetAgentTaskUserInterventionSuggestions` supplies meaningful suggestions.
+- **Paired Copilot Capability** - an `enumextension` of `Copilot Capability` exists and is registered at install with an `IsCapabilityRegistered` guard before `RegisterCapability`, with valid availability and billing values.
+- **Permissions (BC 28.1+)** - admin-only creation, when intended, is enforced via `ShowCanCreateAgent` returning `AgentSystemPermissions.CurrentUserHasCanManageAllAgentsPermission()`.
+
+## Action
+
+For each worklist item, evaluate the AL and emit findings. Reframe the correct-build rules as defects to flag:
+
+- **Missing `User Security ID : Guid` on the setup page source table.** The first-time setup page named by `GetFirstTimeSetupPageId` must expose a `User Security ID : Guid` field for BC to inject the new agent's user id. Absence is a `blocker`: the agent cannot be created.
+- **`RegisterCapability` without an `IsCapabilityRegistered` guard.** Duplicate registration throws at install. Flag `major`; suggest wrapping the call. Example of the correct guard:
+
+  ```al
+  if not CopilotCapability.IsCapabilityRegistered(Enum::"Copilot Capability"::"My Agent Capability") then
+      CopilotCapability.RegisterCapability(
+          Enum::"Copilot Capability"::"My Agent Capability",
+          Enum::"Copilot Availability"::Preview,
+          Enum::"Copilot Billing Type"::"Microsoft Billed",
+          LearnMoreUrlTxt);
+  ```
+
+- **No paired Copilot Capability registration at all.** Without the `Copilot Capability` enum value and its runtime registration the agent never appears in the Copilot & agent capabilities page and refuses to run. Flag `blocker`.
+- **`AnalyzeAgentTaskMessage` mutating the input message.** Only `Type::Output` may be mutated; the input is the user's record. Mutating input (no `if AgentTaskMessage.Type <> AgentTaskMessage.Type::Output then exit;` guard) is a `major` correctness defect.
+- **Raising `Severity::Error` on minor or recoverable issues.** `Error` halts the task; prefer `Warning` plus intervention suggestions. Flag `minor` when a recoverable condition is escalated to `Error`.
+- **`ShowCanCreateAgent` returning `false` with no alternative path.** This makes the agent type permanently uncreatable. Flag `major`. Conversely, leaving creation open when the design intends admin-only (no `CurrentUserHasCanManageAllAgentsPermission()` gate on BC 28.1+) is a `minor` permission finding naming the `bc-version` dimension.
+- **Invalid availability or billing enum values.** Availability must be `Preview` or `Generally Available`; billing must be `Custom Billed`, `Microsoft Billed`, or `Not Billed`. An invalid token is `major`.
+- **Bypassing `Agent Message.UpdateText` for text changes.** Direct field writes to message text are unsafe; flag `minor` and recommend `UpdateText`.
+
+Cite a `style` or `security` knowledge file in `references` when a finding maps onto one (for example a hard-coded user-facing annotation message that should be a `Label`); otherwise emit an agent finding within this skill's domain (`references: []`, `id` prefixed `agent:`, severity capped per `skills/do.md`). Set `confidence` to `high` for unambiguous interface or enum matches, `medium` for heuristic detections or when any frontmatter dimension was `unknown`, and `low` for applicability-only advisories. For mechanical fixes (add the `IsCapabilityRegistered` guard, add the `Type::Output` guard line, correct an enum value), emit `findings[].suggested-code` with the literal replacement; otherwise set `suggested-code-omission-reason`. See `skills/do.md` for the full contract.
+
+Outcome selection: `completed` when every worklist item was evaluated (including an empty `findings` array); `no-knowledge` when no applicable rule survived Source, Relevance, and configuration filtering; `not-applicable` when the change defines no agent and touches no Agent SDK surface; `partial` when a budget was hit before the worklist was exhausted; `failed` on an unrecoverable error (`outcome-reason` required).
+
+## Output
+
+Output conforms to the DO output contract. A populated example:
+
+```json
 {
-    value(50101; "My Agent")
+  "skill": { "id": "ai-agent-sdk", "version": 1 },
+  "outcome": "completed",
+  "summary": {
+    "counts": { "blocker": 1, "major": 1, "minor": 0, "info": 0 },
+    "coverage": { "worklist-size": 6, "items-evaluated": 6 }
+  },
+  "findings": [
     {
-        Implementation =
-            IAgentFactory = MyAgentFactory,
-            IAgentMetadata = MyAgentMetadata,
-            IAgentTaskExecution = MyAgentTaskExecution;
+      "id": "agent:setup-page-missing-user-security-id",
+      "severity": "blocker",
+      "message": "The first-time setup page returned by GetFirstTimeSetupPageId has a source table with no 'User Security ID : Guid' field. BC injects the new agent's user id into that field, so creation will fail. Recommendation: add a field of type Guid named 'User Security ID' to the source table.",
+      "location": { "file": "src/Agent/MyAgentSetup.Page.al", "line": 12 },
+      "references": [],
+      "confidence": "high"
+    },
+    {
+      "id": "agent:register-capability-unguarded",
+      "severity": "major",
+      "message": "RegisterCapability is called without a preceding IsCapabilityRegistered check, so a re-install throws on duplicate registration. Recommendation: guard the call with IsCapabilityRegistered.",
+      "location": { "file": "src/Agent/MyAgentInstall.Codeunit.al", "line": 18 },
+      "references": [],
+      "confidence": "high",
+      "suggested-code": "        if not CopilotCapability.IsCapabilityRegistered(Enum::\"Copilot Capability\"::\"My Agent Capability\") then\n            CopilotCapability.RegisterCapability("
     }
+  ],
+  "suppressed": []
 }
 ```
-
-| Interface | Concern | Typical methods |
-|---|---|---|
-| `IAgentFactory` | Creation flow and UI gates | `GetFirstTimeSetupPageId`, `ShowCanCreateAgent`, `GetDefaultProfile`, `GetDefaultAccessControls` |
-| `IAgentMetadata` | Runtime metadata that BC needs about the agent | `GetSetupPageId`, `GetAgentTaskMessagePageId`, `GetAgentAnnotations`, `GetSummaryPageId` |
-| `IAgentTaskExecution` | Per-turn input/output analysis and intervention | `AnalyzeAgentTaskMessage`, `GetAgentTaskUserInterventionSuggestions` |
-
-## IAgentFactory
-
-- `GetFirstTimeSetupPageId`: the page BC opens when a user creates a new instance of this agent type. The source table on that page **must** contain a `User Security ID : Guid` field. BC injects the new agent's user id into that field.
-- `ShowCanCreateAgent`: returns whether the current user can create this agent type. From BC 28.1+, agent discovery is no longer admin-only by default. Gate on `AgentSystemPermissions.CurrentUserHasCanManageAllAgentsPermission()` to keep admin-only.
-- `GetDefaultProfile(var TempAllProfile: Record "All Profile" temporary)`: which role-centre profile the agent uses by default.
-- `GetDefaultAccessControls(var TempAccessControlBuffer: Record "Access Control Buffer" temporary)`: default permission sets to assign on creation.
-
-## IAgentMetadata
-
-- `GetSetupPageId`: the page BC opens when a user views or edits an existing agent.
-- `GetAgentTaskMessagePageId`: defaults to `Page::"Agent Task Message Card"`. Override only if your agent needs a custom task message UI.
-- `GetAgentAnnotations(var Annotations: Record "Agent Annotation")`: returns the static annotations to attach to every task message of this agent type. Annotations carry severity, code, message, details.
-- `GetSummaryPageId`: a numeric-only KPI summary page shown on the agent's dashboard tile. Keep it focused: this is the at-a-glance health view.
-
-## IAgentTaskExecution
-
-This is where the runtime hooks live.
-
-- `AnalyzeAgentTaskMessage(var AgentTaskMessage: Record "Agent Task Message")`:
-  - Called for both `Type::Input` AND `Type::Output` messages.
-  - You can mutate the output (e.g. append a signature, normalise dates).
-  - Attach annotations to flag issues:
-    - `Severity::Error` halts the task with the annotation message
-    - `Severity::Warning` requests user intervention (a human reviews before continuing)
-  - Use `codeunit "Agent Message".UpdateText(AgentTaskMessage, NewText)` to mutate text safely.
-
-- `GetAgentTaskUserInterventionSuggestions(var AgentTaskUserIntSuggestion: Record "Agent Task User Int Suggestion")`:
-  - Called when a Warning annotation triggers intervention.
-  - Provide one or more suggestions: each has `Summary`, `Description` (Locked), `Instructions` (what the human should review).
-  - Example: "Customer requested an unusual discount" → suggestions: "Approve and continue", "Reject", "Request supporting documentation".
-
-### Example: append a signature to every output
-
-```al
-codeunit 50102 MyAgentTaskExecution implements IAgentTaskExecution
-{
-    procedure AnalyzeAgentTaskMessage(var AgentTaskMessage: Record "Agent Task Message")
-    var
-        AgentMessage: Codeunit "Agent Message";
-        OldText: Text;
-        SignatureTxt: Label '\n\nSent by your AI agent.', Locked = true;
-    begin
-        if AgentTaskMessage.Type <> AgentTaskMessage.Type::Output then
-            exit;
-        OldText := AgentMessage.GetText(AgentTaskMessage);
-        if not OldText.EndsWith(SignatureTxt) then
-            AgentMessage.UpdateText(AgentTaskMessage, OldText + SignatureTxt);
-    end;
-
-    procedure GetAgentTaskUserInterventionSuggestions(var AgentTaskUserIntSuggestion: Record "Agent Task User Int Suggestion")
-    begin
-        // ...
-    end;
-}
-```
-
-## Register the paired Copilot Capability
-
-Every custom agent must have a matching `Copilot Capability` enum value AND a runtime registration. Without registration the agent will not appear in the Copilot & agent capabilities page and will refuse to run.
-
-### Extend the capability enum
-
-```al
-enumextension 50103 "My Copilot Caps" extends "Copilot Capability"
-{
-    value(50110; "My Agent Capability") { Caption = 'My Agent'; }
-}
-```
-
-### Register at install time
-
-```al
-codeunit 50104 "My Agent Install"
-{
-    Subtype = Install;
-    InherentEntitlements = X;
-    InherentPermissions = X;
-
-    trigger OnInstallAppPerDatabase()
-    var
-        CopilotCapability: Codeunit "Copilot Capability";
-        LearnMoreUrlTxt: Label 'https://example.com/agents/my-agent', Locked = true;
-    begin
-        if not CopilotCapability.IsCapabilityRegistered(Enum::"Copilot Capability"::"My Agent Capability") then
-            CopilotCapability.RegisterCapability(
-                Enum::"Copilot Capability"::"My Agent Capability",
-                Enum::"Copilot Availability"::Preview,
-                Enum::"Copilot Billing Type"::"Microsoft Billed",
-                LearnMoreUrlTxt);
-    end;
-}
-```
-
-Availability values: `Preview`, `Generally Available`. Billing values: `Custom Billed`, `Microsoft Billed`, `Not Billed`.
-
-## Permission rules (BC 28.1+)
-
-- Default behaviour: any user can discover and (subject to setup gates) create agent instances.
-- To enforce admin-only: implement `ShowCanCreateAgent` to return `AgentSystemPermissions.CurrentUserHasCanManageAllAgentsPermission()`.
-- Per-user agent rights are managed through the **Agent Configuration Rights** page.
-
-## Anti-patterns
-
-- Skipping the `IsCapabilityRegistered` check before `RegisterCapability`: duplicate registration throws.
-- Returning `false` from `ShowCanCreateAgent` without an alternative path: the agent type becomes uncreatable until you fix the gate.
-- Mutating the input message in `AnalyzeAgentTaskMessage`: only mutate `Type::Output`. Input is the user's record.
-- Raising annotations with `Severity::Error` on every minor issue: prefer Warning + intervention suggestions. Errors halt the task.
-- Forgetting that the setup page's source table needs a `User Security ID : Guid` field.
-
-## Related skills
-
-- `ai-development-toolkit` for the design surface and Tasks AL API
-- `ai-test-driven-development` for evaluation suites and agent tests
-- `copilot-promptdialog` if your agent surfaces a Copilot prompt experience
-- `copilot-capability-implementation` for capabilities that wrap a direct Azure OpenAI call (no agent runtime)
-
-## References
-
-- Define and register an agent: https://learn.microsoft.com/dynamics365/business-central/dev-itpro/ai/ai-agent-sdk-define-register
-- BCApps Agent source: https://github.com/microsoft/BCApps/tree/main/src/System%20Application/App/Agent
-- BCTech Sales Validation Agent sample: https://github.com/microsoft/BCTech/tree/master/samples/BCAgents/SalesValidationAgent

@@ -1,214 +1,96 @@
 ---
-kind: task-skill
+kind: action-skill
 id: al-mcp-server
 version: 1
-title: Drive AL build and compile with the AL MCP Server
-description: Use the standalone AL MCP Server (altool launchmcpserver) to drive AL build, compile, publish, symbol download, and symbol search from any MCP-compatible agent. Use when wiring AL development into CI, Copilot Agent Mode outside VS Code, or any non-VS-Code AI workflow.
+title: AL MCP Server Wiring Review
+description: Reviews how the standalone AL MCP Server is wired into a CI or agent workflow and emits a findings report.
+inputs: [repository, file-path]
+outputs: [findings-report]
 bc-version: [all]
 technologies: [al, powershell]
 countries: [w1]
 application-area: [all]
 ---
 
-# AL MCP Server
+# AL MCP Server Wiring Review
 
-The standalone Model Context Protocol server that exposes AL developer tools (build, compile, publish, symbols, diagnostics, auth) to any MCP-compatible client. Same tool names and behaviour as the VS Code Language Model Tools, but runs as its own process and works headless.
+Reviews how the standalone AL MCP Server (`altool launchmcpserver`) is wired into a CI pipeline or agent workflow - server startup and transport, the tool calls and their JSON-RPC envelopes, authentication, and the per-tool parameters - and emits a findings report. The server exposes AL developer tools (build, compile, publish, symbols, diagnostics, auth) to any MCP-compatible client; the central concerns are correct envelope shape, using the right tool for the job, and offline-safe CI configuration. This is a leaf action skill: it invokes no sub-skills.
 
-## When to use
+An orchestrator invokes this skill with a `repository` (a whole-repo audit of MCP server wiring in CI scripts and agent config) or a `file-path` (a targeted re-check of a single workflow script or MCP client config). The skill produces a single JSON document conforming to the DO output contract.
 
-- Wiring AL build/test into a CI pipeline that isn't VS Code
-- Driving AL development from Claude, Copilot Studio, custom agents, or any other MCP client
-- Headless agents that need to build, compile, publish, or search symbols
-- Quick PR-gate scripts that need fast compile feedback (`al_compile` is faster than `al_build`)
+## Source
 
-## Prerequisites
+The rule set is the AL MCP Server reference: transport selection, the JSON-RPC envelope conventions, the tool table and per-tool parameter cheat sheet, the authentication flow, and the documented gotchas. This is tooling configuration that the curated BCQuality knowledge domains do not cover. Read the BCQuality knowledge index once (the `knowledge-index.json` Entry's preparation step regenerates over the already-filtered clone); no curated domain maps onto AL MCP Server wiring, so for each concrete violation emit an agent finding within this skill's tooling-configuration domain. Do not open individual article bodies at this step; open an article only once it enters the Worklist.
 
-- .NET 8 runtime
-- AL Language extension 17.0 or later (provides the `altool` binary)
-- Network access to the Business Central environment for tools that hit a server (`al_publish`, `al_downloadsymbols`)
+## Relevance
 
-## Starting the server
+Apply the frontmatter matching rules defined in READ against the task context:
 
-**STDIO (default for most agents):**
+- `bc-version` - the target BC version from the extension's `app.json`, or `unknown` if unavailable.
+- `technologies` - `[al, powershell]` (the server drives AL tooling, typically invoked from PowerShell-based CI scripts).
+- `countries` - the countries declared in the app's `app.json`; default to the orchestrator's configured context, else `unknown`.
+- `application-area` - the union of application areas declared by the extension; pass the actual set, do not substitute `[all]`.
 
-```bash
-altool launchmcpserver --transport stdio
-```
+Discard tasks with no AL MCP Server wiring to review. Retain conditionally applicable rules (any dimension `unknown`) only when configuration permits; findings derived from them have `confidence` no higher than `medium` and name the unknown dimension in the `message`.
 
-Reads JSON-RPC requests on `stdin`, writes responses on `stdout`, diagnostics on `stderr`. Shuts down on `stdin` EOF or SIGTERM.
+## Worklist
 
-**HTTP (for network-attached agents):**
+Narrow the reference to the wiring present in the script, config, or change under review. Group the candidate worklist by area:
 
-```bash
-altool launchmcpserver --transport http --port 5010
-```
+- **Startup and transport** - `altool launchmcpserver` uses the right transport (`stdio` default for most agents, `--transport http --port <n>` for network-attached agents); the prerequisites (.NET 8, AL Language extension 17.0+, network access for server-hitting tools) are met for the tools invoked.
+- **JSON-RPC envelope** - calls follow the standard MCP shape (`jsonrpc`, `id`, `method: "tools/call"`, `params.name`, `params.arguments`); `al_symbolsearch` is the only tool whose arguments wrap under a `parameters` key, while every other tool puts arguments at the top level under `params.arguments`.
+- **Tool selection** - `al_compile` (validate without packaging, faster) is used for PR-gate checks, not `al_build`; `al_compile` is AL MCP only and has no VS Code equivalent (use `al_build` with `scope: "current"` there); `al_build` produces a `.app` only on zero errors (warnings still produce one).
+- **CI offline safety** - `al_downloadsymbols` uses `globalSourcesOnly: true` in CI (no BC connection or auth, only Microsoft NuGet feeds and AppSource).
+- **Authentication** - `al_auth_login` is called first per session for cloud calls; tokens cache on disk and are reused; `noCache: true` forces a fresh sign-in when cached scopes are wrong; on-prem Windows auth needs no explicit sign-in.
+- **Per-tool parameters** - `al_publish` provides one of `appPath`/`projectPath` plus cloud or on-prem connection params; `al_symbolsearch` filters and limits (max 200) are well-formed; diagnostic `Location` is parsed as `"File.al(line,col)"`.
 
-**Claude / generic agent config:**
+A rule enters the worklist when the script, config, or agent invocation under review touches its area.
+
+## Action
+
+For each worklist item, evaluate the wiring and emit findings. These are agent findings within this skill's tooling-configuration domain (`references: []`, `id` prefixed `agent:`, severity capped per `skills/do.md`), since no curated knowledge file covers the AL MCP Server:
+
+- A wiring fault that makes the call fail outright is a `blocker`: an `al_symbolsearch` call that puts its arguments at the top level instead of wrapping them under the `parameters` key, or a tool invoked without its required connection parameters (`al_publish` with neither `appPath` nor `projectPath`, or with no cloud/on-prem block).
+- A misuse that produces wrong or slow results is `major`: `al_build` used for a PR gate where `al_compile --onlyErrors` is the correct fast gate, a CI `al_downloadsymbols` without `globalSourcesOnly: true` (forces an unnecessary BC connection/auth in CI), or `al_auth_login` not called before a cloud `al_publish`/`al_downloadsymbols`.
+- A hygiene gap is `minor`: restarting the server between calls instead of reusing the single persistent compilation session, an `al_symbolsearch` `limit` over 200, or a doc link using the wrong `al-tool-symbolsearch` slug instead of `al-tool-symbol-search`.
+- When a rule is clearly applicable but no violation is detected, emit `info`.
+
+Set `confidence` to `high` for unambiguous envelope/parameter matches (a missing `parameters` wrapper, a missing required arg), `medium` for heuristic detections or when any frontmatter dimension was `unknown`, and `low` for applicability-only advisories. For mechanical fixes (wrap `al_symbolsearch` args under `parameters`, add `globalSourcesOnly: true`, switch a PR gate from `al_build` to `al_compile`), emit `findings[].suggested-code` with the literal replacement; otherwise set `suggested-code-omission-reason`. Hold every agent finding to the precision bar in `skills/do.md`; when in doubt, omit. See `skills/do.md` for the full contract.
+
+Outcome selection: `completed` when every worklist item was evaluated (including an empty `findings` array); `no-knowledge` when no applicable rule survived Source, Relevance, and configuration filtering; `not-applicable` when the task context has no AL MCP Server wiring to review; `partial` when a budget was hit before the worklist was exhausted; `failed` on an unrecoverable error (`outcome-reason` required).
+
+## Output
+
+Output conforms to the DO output contract. A populated example:
 
 ```json
 {
-  "mcpServers": {
-    "al": {
-      "command": "altool",
-      "args": ["launchmcpserver", "--transport", "stdio"]
+  "skill": { "id": "al-mcp-server", "version": 1 },
+  "outcome": "completed",
+  "summary": {
+    "counts": { "blocker": 1, "major": 1, "minor": 0, "info": 0 },
+    "coverage": { "worklist-size": 6, "items-evaluated": 6 }
+  },
+  "findings": [
+    {
+      "id": "agent:al-symbolsearch-missing-parameters-wrapper",
+      "severity": "blocker",
+      "message": "al_symbolsearch is called with query and filters at the top level of arguments. al_symbolsearch is the only tool whose arguments must wrap under a 'parameters' key; the call will fail otherwise. Recommendation: nest the arguments under 'parameters'.",
+      "location": { "file": "ci/symbol-search.ps1", "line": 22 },
+      "references": [],
+      "confidence": "high",
+      "suggested-code": "  \"arguments\": { \"parameters\": { \"query\": \"Post\", \"filters\": { \"kinds\": [\"Codeunit\"] } } }"
+    },
+    {
+      "id": "agent:downloadsymbols-missing-globalsourcesonly-in-ci",
+      "severity": "major",
+      "message": "al_downloadsymbols is invoked in a CI gate without globalSourcesOnly: true, forcing a BC server connection and auth that CI does not need. Recommendation: set globalSourcesOnly: true to pull only from Microsoft NuGet feeds and AppSource.",
+      "location": { "file": "ci/pr-gate.ps1", "line": 14 },
+      "references": [],
+      "confidence": "high",
+      "suggested-code": "  \"arguments\": { \"globalSourcesOnly\": true }"
     }
-  }
+  ],
+  "suppressed": []
 }
 ```
-
-## Tools exposed
-
-| Tool | VS Code | AL MCP | What it does |
-|---|---|---|---|
-| `al_build` | yes | yes | Compile and produce a `.app` package |
-| `al_compile` | no | yes | Validate AL code without packaging (faster than `al_build`, AL MCP only) |
-| `al_publish` | yes | yes | Deploy `.app` to BC cloud or on-prem |
-| `al_downloadsymbols` | yes | yes | Pull `.app` symbol packages to `.alpackages/` |
-| `al_symbolsearch` | yes | yes | Search objects and members across project and dependencies |
-| `al_getdiagnostics` | yes | yes | Read diagnostics from the last compilation |
-| `al_getpackagedependencies` | no | yes | Read declared dependencies (AL MCP only) |
-| `al_auth_login` | no | yes | MSAL interactive sign-in to BC cloud (AL MCP only) |
-| `al_auth_logout` | no | yes | Clear cached MSAL token (AL MCP only) |
-
-## JSON-RPC envelope
-
-All calls follow the standard MCP shape:
-
-```json
-{
-  "jsonrpc": "2.0",
-  "id": 1,
-  "method": "tools/call",
-  "params": {
-    "name": "al_compile",
-    "arguments": { "onlyErrors": true }
-  }
-}
-```
-
-**`al_symbolsearch` is the only tool whose arguments wrap under a `parameters` key.** Every other tool puts arguments at the top level under `params.arguments`.
-
-```json
-{
-  "name": "al_symbolsearch",
-  "arguments": {
-    "parameters": {
-      "query": "Post",
-      "filters": { "kinds": ["Codeunit"], "scope": "project" }
-    }
-  }
-}
-```
-
-## Workflow patterns
-
-### CI gate (fast)
-
-```
-al_auth_login (if cloud symbols needed)
-  -> al_downloadsymbols (globalSourcesOnly=true for offline)
-  -> al_compile (onlyErrors=true)
-  [if fail] -> al_getdiagnostics
-  [if pass] -> exit 0
-```
-
-`al_compile --onlyErrors` is the right gate for PR checks: skips `.app` packaging, returns `{Succeeded, Diagnostics, Message}`. Faster than `al_build`.
-
-### Build and deploy
-
-```
-al_downloadsymbols
-  -> al_build (produces .app)
-  -> al_publish (appPath, environmentName, environmentType, tenant)
-```
-
-### Headless symbol exploration
-
-```
-al_symbolsearch with query="*" and filters tuned for the question.
-```
-
-## Per-tool parameter cheat sheet
-
-### `al_build`
-
-- `scope`: `current` (default) or `all`
-- `projectPath`: target a specific project in multi-project workspaces
-- `outputPath`: where to write the `.app`
-- `onlyErrors`: bool, default false
-- `maxDiagnostics`: int, default 100
-- `enableCodeAnalysis`: bool
-- `codeAnalyzers`: array of `${CodeCop}`, `${AppSourceCop}`, `${PerTenantExtensionCop}`, `${UICop}`
-
-The `.app` is produced only when build has zero errors. Warnings still produce a `.app`.
-
-### `al_compile`
-
-- `onlyErrors`: bool, default **true**
-- `maxDiagnosticsPerCompilation`: int, default 100
-- `enableCodeAnalysis`: bool
-- `codeAnalyzers`: same analyzer placeholders as `al_build`
-
-Returns `{Succeeded, Diagnostics[{Severity, Code, Location, Description}], Message}`. Diagnostic `Location` is `"MyCodeunit.al(42,15)"`.
-
-### `al_publish`
-
-Provide one of `appPath` or `projectPath`. Then add either cloud or on-prem connection params.
-
-| Cloud | On-prem |
-|---|---|
-| `environmentName`, `environmentType` (`Sandbox`/`Production`), `tenant` | `serverUrl`, `serverInstance`, `port`, `authentication` (`AAD`/`Windows`/`UserPassword`, default `AAD`) |
-
-Common options: `schemaUpdateMode` (`Synchronize`/`ForceSync`/`Recreate`, default `Synchronize`), `forceUpgrade`, `skipBuild`, `buildDependencies`, `useInteractiveLogin` (default true), `noCache`.
-
-VS Code-only extras: `debug` (auto-attach debugger), `type` (`full`/`incremental`), `fulldependencytree`, `skipbuild`.
-
-### `al_downloadsymbols`
-
-Pulls symbols to `.alpackages/`. Set `globalSourcesOnly: true` for CI (no BC server connection or auth, only Microsoft NuGet feeds and AppSource). Other params: `projectPath`, `force`, `noCache`, `useInteractiveLogin` (default true), and the same cloud / on-prem overrides as `al_publish` to override `launch.json`.
-
-### `al_symbolsearch`
-
-Wrap arguments under `parameters`. Filters:
-
-- `kinds`: `["Table", "Codeunit", "Page", "Report", "Enum", "Interface"]`
-- `objectName`: search within a specific object
-- `memberKinds`: `["Field", "Method", "Key", "Action", "Trigger"]`
-- `namespace`, `access` (`["Public", "Internal"]`), `obsoleteState` (`["No", "Pending", "Removed"]`)
-- `match`: `name` / `doc` / `all` (default `name`)
-- `scope`: `project` / `dependencies` / `all` (default `all`)
-- `limit`: max 200
-
-Returns `symbols[]` with `{id, name, fullName, kind, namespace, containerName, signature, docSummary, path}` and `truncated: bool`.
-
-## Authentication
-
-AL MCP uses MSAL interactive (browser-based) auth for cloud calls. Tokens cache on disk and reuse across calls.
-
-```
-al_auth_login(tenant, environment)   # call first per session
-  -> tokens cached
-  -> subsequent al_publish / al_downloadsymbols reuse the cache
-al_auth_logout                       # clear the cache
-```
-
-On-prem with Windows auth needs no explicit sign-in.
-
-## Common gotchas
-
-- **`al_symbolsearch` requires the `parameters` wrapper.** Every other tool puts args at top level. Easy to miss.
-- **`al_compile` does not exist in VS Code Language Model Tools.** Use `al_build` with `scope: "current"` in VS Code for an equivalent.
-- **Doc URL slug**: the page is `al-tool-symbol-search` (hyphenated), not `al-tool-symbolsearch`. Some Microsoft links use the wrong slug.
-- **Single compilation session persists** across calls for the process lifetime. Calling multiple tools in sequence is faster than restarting the server.
-- **Token cache** is per-user on disk. `noCache: true` forces a fresh sign-in if the cached token has the wrong scopes.
-
-## Related skills
-
-- `al-go-pipelines` for wiring `altool launchmcpserver` into AL-Go CI
-- `troubleshooting-mcp-server` for debug-time AI assistance
-- `bc-mcp-server-data` for the BC product MCP server (data, not dev tools)
-
-## References
-
-- AL MCP server: https://learn.microsoft.com/dynamics365/business-central/dev-itpro/developer/al-agent-tools/al-mcp-server
-- `al_build`, `al_compile`, `al_publish`, `al_downloadsymbols`, `al_symbolsearch`: see `al-tool-*` pages under the same path

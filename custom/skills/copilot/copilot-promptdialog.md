@@ -1,191 +1,109 @@
 ---
-kind: task-skill
+kind: action-skill
 id: copilot-promptdialog
 version: 1
-title: Design BC Copilot UX with PromptDialog
-description: Design Business Central Copilot UX using the PromptDialog page type. Use when building a new Copilot feature's UI, reviewing a PromptDialog implementation, or diagnosing "the Generate button does not appear" / "trailing whitespace breaks Copilot" issues.
+title: Copilot PromptDialog Page Review
+description: Reviews Business Central Copilot UX implemented with the PromptDialog page type and emits a findings report.
+inputs: [pr-diff, file-path]
+outputs: [findings-report]
 bc-version: [all]
 technologies: [al]
 countries: [w1]
 application-area: [all]
 ---
 
-# Copilot PromptDialog Page Type
+# Copilot PromptDialog Page Review
 
-The only sanctioned UI surface for Copilot features in Business Central. PromptDialog gives users a structured input/output flow with the signature Copilot look, system actions, prompt guides, and built-in safety controls.
+Reviews Business Central Copilot UX built on the `PageType = PromptDialog` surface: the required page properties, the three sanctioned layout areas, the two sanctioned action areas, the `OnQueryClosePage` persistence pattern, and the AOAI retry loop. It emits a findings report. This is a leaf action skill: it invokes no sub-skills.
 
-## When to use
+An orchestrator invokes this skill with either a `pr-diff` (the standard PR-review entry point for a PromptDialog page change) or a `file-path` (single-file review of a PromptDialog page object). The skill produces a single JSON document conforming to the DO output contract.
 
-- Building a new Copilot feature with an interactive Prompt → Generate → Content flow
-- Reviewing a `PageType = PromptDialog` implementation for compliance
-- Diagnosing why the Generate button does not appear or why Copilot stops responding mid-action
-- Wiring a prompt guide and prompt options
+## Source
 
-## Prerequisites
+The rule set is this skill's own PromptDialog knowledge plus BCQuality knowledge entries whose domain covers the concerns it touches (style for captions, tooltips, and action naming). Read the BCQuality knowledge index once and take the `style` domain entries as the citable candidate set across every enabled layer; do not open an article body until it enters the Worklist. The PromptDialog framework contract (allowed areas, system actions, mandatory properties) is not covered by the corpus; for a concrete violation there, emit an agent finding within this skill's PromptDialog domain.
 
-- BC AL runtime **12.1 or later**
-- The feature must already have a registered Copilot Capability (see `copilot-capability-implementation`)
+## Relevance
 
-## Snippet to scaffold
+Apply the frontmatter matching rules defined in READ against the task context:
 
-In VS Code with the AL Language extension:
+- `bc-version` - the target BC version from the consuming app's `app.json`, or `unknown`. PromptDialog requires AL runtime 12.1 or later, so this dimension is load-bearing.
+- `technologies` - `[al]`.
+- `countries` - from the app's `app.json`, else `unknown`.
+- `application-area` - the union of areas declared by the changed objects; pass the actual set.
 
-```
-tpage → "Page of type Prompt Dialog"
-```
+Discard files not applicable to AL. Retain conditionally applicable rules (any dimension `unknown`) only when configuration permits; cap their findings at `medium` confidence and name the unknown dimension.
 
-## Required page properties
+## Worklist
 
-```al
-page 54320 "Copilot Job Proposal"
+Narrow to the rules that apply to the page under review. A rule enters the worklist when the diff or file touches its area:
+
+- **Page properties** - `PageType = PromptDialog`; `Extensible = false`; `Image = Sparkle` (or `SparkleFilled`); `IsPreview` set during the preview lifecycle; deliberate `PromptMode`.
+- **Layout areas** - only `Prompt`, `Content`, and `PromptOptions`; no repeater controls in `Prompt` or `Content`; `PromptOptions` carries only option-type fields.
+- **Action areas** - only `SystemActions` and `PromptGuide`; only the five system actions (`Generate`, `Regenerate`, `Attach`, `OK`, `Cancel`); no custom system actions; prompt-guide actions set the input variable and render only in `Prompt` mode.
+- **Action naming** - no trailing whitespace in action `Name` (the caption may have it, the name may not).
+- **Persistence** - `OnQueryClosePage` saves generated content when `CloseAction = Action::OK`.
+- **Generation robustness** - the AOAI call is wrapped in a bounded retry loop terminating in a friendly `Error`.
+- **Discoverability** - a complex feature provides a prompt guide (at least three examples).
+
+## Action
+
+For each worklist item, evaluate the page object and emit findings. Reframe the correct-build rules as defects to flag:
+
+- **Trailing whitespace in an action `Name`.** This breaks Copilot silently. Flag `blocker` because the feature fails with no visible error. The `Caption` may carry trailing space, but the `Name` may not.
+- **`Extensible = true` (or omitted) on a PromptDialog page.** `Extensible = false` is mandatory to protect the AI experience from drift. Flag `blocker`:
+
+  ```al
+  page 54320 "Copilot Job Proposal"
+  {
+      PageType = PromptDialog;
+      Extensible = false;   // mandatory
+  }
+  ```
+
+- **Repeater control inside `area(Prompt)` or `area(Content)`.** Not supported. Flag `major` and recommend a list-of-text or a JSON shape rendered as a single multiline field.
+- **A non-option field in `area(PromptOptions)`.** `PromptOptions` accepts only option-type (enum) fields. Flag `major`.
+- **A custom system action, or an action area other than `SystemActions` / `PromptGuide`.** Only the five sanctioned system action names work and only two action areas are valid. Flag `major`.
+- **Missing `Generate` system action.** Without it the Generate button never appears and the page cannot produce content. Flag `blocker`.
+- **No `OnQueryClosePage` persistence on `Action::OK`.** Generated content is lost when the user keeps it. Flag `major`.
+- **AOAI call with no retry loop or no terminal friendly `Error`.** A single attempt that surfaces a raw failure is poor UX. Flag `minor` and recommend the bounded retry pattern (zero-indexed up to N attempts, each `Codeunit.Run()` swallowing errors, terminal `Error` with a label).
+- **`IsPreview` omitted during a preview release.** The user-facing preview note is missing. Flag `minor`.
+- **No prompt guide on a complex feature.** Users cannot phrase prompts; provide at least three examples. Flag `minor`.
+
+Cite a `style` knowledge file in `references` when a finding maps onto one (for example a missing `ToolTip` on a prompt-guide action, or a user-facing string that should be a `Label`); otherwise emit an agent finding within this skill's domain (`references: []`, `id` prefixed `agent:`, severity capped per `skills/do.md`). Set `confidence` to `high` for unambiguous property or syntax matches, `medium` for heuristic detections or when any frontmatter dimension was `unknown`, and `low` for applicability-only advisories. For mechanical fixes (set `Extensible = false`, strip trailing whitespace from an action name, add the `Generate` system action), emit `findings[].suggested-code`; otherwise set `suggested-code-omission-reason`. See `skills/do.md` for the full contract.
+
+Outcome selection: `completed` when every worklist item was evaluated (including an empty `findings` array); `no-knowledge` when no applicable rule survived filtering; `not-applicable` when the change touches no PromptDialog page; `partial` on a budget cutoff; `failed` on an unrecoverable error (`outcome-reason` required).
+
+## Output
+
+Output conforms to the DO output contract. A populated example:
+
+```json
 {
-    PageType = PromptDialog;
-    Extensible = false;           // mandatory
-    IsPreview = true;             // optional, adds an in-UI preview note
-    Image = Sparkle;              // or SparkleFilled for prominent options
-    Caption = 'Suggest Job';
-
-    layout { ... }
-    actions { ... }
+  "skill": { "id": "copilot-promptdialog", "version": 1 },
+  "outcome": "completed",
+  "summary": {
+    "counts": { "blocker": 1, "major": 1, "minor": 0, "info": 0 },
+    "coverage": { "worklist-size": 7, "items-evaluated": 7 }
+  },
+  "findings": [
+    {
+      "id": "agent:promptdialog-extensible-true",
+      "severity": "blocker",
+      "message": "This PromptDialog page does not set Extensible = false, which is mandatory for Copilot pages. Recommendation: add Extensible = false to the page properties.",
+      "location": { "file": "src/Copilot/CopilotJobProposal.Page.al", "line": 4 },
+      "references": [],
+      "confidence": "high",
+      "suggested-code": "    Extensible = false;"
+    },
+    {
+      "id": "agent:promptoptions-non-option-field",
+      "severity": "major",
+      "message": "area(PromptOptions) contains a Text field; PromptOptions accepts only option-type (enum) fields, so the field will not render as an option button. Recommendation: model the choice as an enum and bind that field instead.",
+      "location": { "file": "src/Copilot/CopilotJobProposal.Page.al", "line": 41 },
+      "references": [],
+      "confidence": "high"
+    }
+  ],
+  "suppressed": []
 }
 ```
-
-| Property | Why it matters |
-|---|---|
-| `PageType = PromptDialog` | The whole UX framework is gated on this type. No other page type renders the signature Copilot frame. |
-| `Extensible = false` | **Mandatory.** Customers cannot extend Copilot pages. This protects the AI experience from drift. |
-| `Image = Sparkle` (or `SparkleFilled`) | Standard Copilot icon. Use `SparkleFilled` for an action that should stand out. |
-| `IsPreview = true` | Adds a "preview" note in the UI. Set during the feature's preview lifecycle. |
-| `PromptMode` | Switches the page between `Prompt`, `Generate`, and `Content` mode. Default starts in `Prompt`. Set `CurrPage.PromptMode` before page opens to override. |
-| `DataCaptionExpression` | Optional title customisation per generated result. |
-
-## Layout areas (only three supported)
-
-```al
-layout
-{
-    area(Prompt)
-    {
-        // Input the user provides. Free-text fields, dropdowns, etc.
-        // NO repeater controls.
-    }
-    area(Content)
-    {
-        // Output the AI produced. NO repeater controls.
-    }
-    area(PromptOptions)
-    {
-        // Option-type fields ONLY. Renders as buttons next to system actions.
-        field(tone; Tone) { }
-        field(format; Format) { }
-    }
-}
-```
-
-- `Prompt`, `Content`, and `PromptOptions` are the only allowed area types in a PromptDialog page.
-- **No repeater controls** in `Prompt` or `Content`. Use a list or array represented as a single field.
-- `PromptOptions` accepts only fields of the **option data type**.
-
-## Action areas (only two supported)
-
-```al
-actions
-{
-    area(SystemActions)
-    {
-        systemaction(Generate)
-        {
-            Caption = 'Generate';
-            trigger OnAction()
-            begin
-                RunGeneration();   // your AOAI call lives here
-            end;
-        }
-        systemaction(Regenerate) { Caption = 'Try again'; trigger OnAction() begin RunGeneration(); end; }
-        systemaction(Attach)     { Caption = 'Attach file'; }
-        systemaction(OK)         { Caption = 'Keep it'; }
-        systemaction(Cancel)     { Caption = 'Discard'; }
-    }
-
-    area(PromptGuide)
-    {
-        // Predefined prompt texts. Only rendered when PromptMode = Prompt.
-        action(SuggestForRetailer)
-        {
-            Caption = 'Suggest for a retailer';
-            ToolTip = 'Use this when the customer is a retail business.';
-            trigger OnAction()
-            begin
-                InputProjectDescription := 'Draft a marketing email for a retailer that ...';
-            end;
-        }
-    }
-}
-```
-
-- Only `SystemActions` and `PromptGuide` areas are valid action areas.
-- The five system actions: `Generate`, `Regenerate`, `Attach`, `OK`, `Cancel`. No custom system actions.
-- `OK` is the "Keep it" action. `Cancel` is "Discard".
-- `PromptGuide` actions typically set the input variable to a templated text in `OnAction`. They render only when `PromptMode = Prompt`.
-
-## OnQueryClosePage pattern
-
-Persist the result when the user clicks OK:
-
-```al
-trigger OnQueryClosePage(CloseAction: Action): Boolean
-begin
-    if CloseAction = Action::OK then
-        SaveGeneratedContent();
-    exit(true);
-end;
-```
-
-## Error handling with retry
-
-The official sample uses a retry loop wrapping the AOAI call:
-
-```al
-local procedure RunGeneration()
-var
-    GenJobProposal: Codeunit "Generate Job Proposal";
-    Attempts: Integer;
-    GenerationFailed: Label 'Copilot could not generate a result. Try again or rephrase your prompt.';
-begin
-    for Attempts := 0 to 3 do
-        if GenJobProposal.Run() then begin
-            // success, propagate the generated content into the page
-            exit;
-        end;
-    Error(GenerationFailed);
-end;
-```
-
-The pattern: zero-indexed up to N attempts, each `Codeunit.Run()` swallows errors so you can retry, terminal Error with a friendly label.
-
-## Anti-patterns to flag in code review
-
-- **Trailing whitespace in action names.** Breaks Copilot silently. Caption can have trailing space, but Name cannot.
-- **`Extensible = true`** on a PromptDialog. Mandatory `false`.
-- **Repeater control inside `area(Prompt)` or `area(Content)`.** Not supported. Use list-of-text or a JSON shape rendered as a multiline field.
-- **Custom system actions.** Only the five sanctioned names work. Don't try to register your own.
-- **Non-option field in `PromptOptions`.** Only option fields. Use enums.
-- **Skipping `IsPreview`** during preview releases. Adds a user-facing note that this is preview.
-- **Missing prompt guide on a complex feature.** Users don't know how to phrase prompts. Provide at least 3 examples.
-
-## Nudging users toward Copilot via floating action bar
-
-Use a prompt action on a normal page to promote a Copilot feature. The floating action bar surfaces relevant Copilot features in context. See `devenv-page-prompting-floating-actionbar` in the AL docs.
-
-## Related skills
-
-- `copilot-capability-implementation` for the underlying AL Copilot capability that the page calls
-- `ai-test-driven-development` for testing PromptDialog features end-to-end
-- `al-code-review` for the wider AL standards the page must follow
-
-## References
-
-- The PromptDialog page type: https://learn.microsoft.com/dynamics365/business-central/dev-itpro/developer/devenv-page-type-promptdialog
-- Build Copilot user experience: https://learn.microsoft.com/dynamics365/business-central/dev-itpro/developer/ai-build-experience
-- BCTech CopilotJobProposal sample: https://github.com/microsoft/BCTech/blob/master/samples/AzureOpenAI/Advanced_SuggestJob/DescribeJob/CopilotJobProposal.Page.al
-- Best practices for AL code (action names): https://learn.microsoft.com/dynamics365/business-central/dev-itpro/compliance/apptest-bestpracticesforalcode

@@ -22,7 +22,3 @@ Reach for the Troubleshooting MCP Server when a runtime error has fired or a pau
 ## Anti Pattern
 
 Using it for the wrong job or expecting capabilities it does not have. It is not a replacement for interactive step-through debugging, for a quick look at one variable, or for learning unfamiliar code by reading it. It offers no time travel, so it only shows what is in scope right now, and it returns no source for frames whose code lives only in compiled .app packages, where you fall back to inspecting variables. The signal of misuse: trying to invoke it with no active paused debug session, on a version before BC 28, or expecting it to replay history or auto-apply fixes.
-
-## See also
-
-- `run-headless-al-builds-with-the-al-mcp-server.md`

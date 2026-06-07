@@ -1,140 +1,93 @@
 ---
-kind: task-skill
+kind: action-skill
 id: bcquality-integration
 version: 1
-title: Consume the BCQuality knowledge corpus
-description: How the verifier agents consume Microsoft's BCQuality knowledge corpus (EquerraNZ/community-BCQuality) as a source of citable BC quality rules. Use when a verifier agent needs to cite a Microsoft-vetted rule, or when authoring a new agent that emits findings against BC code.
+title: BCQuality Consumption Review
+description: Reviews whether a consuming repo and its verifier agents consume the BCQuality knowledge corpus correctly and emits a findings report.
+inputs: [repository, file-path]
+outputs: [findings-report]
 bc-version: [all]
 technologies: [al]
 countries: [w1]
 application-area: [all]
 ---
 
-# BCQuality Integration
+# BCQuality Consumption Review
 
-How the verifier agents (`al-code-quality-reviewer`, `al-readability-checker`, `al-test-validator`, `al-test-coverage-validator`) consume Microsoft's [BCQuality](https://github.com/EquerraNZ/community-BCQuality) knowledge corpus.
+Reviews how a consuming repo and its verifier agents (`al-code-quality-reviewer`, `al-readability-checker`, `al-test-validator`, `al-test-coverage-validator`, and their peers) consume the Microsoft-maintained BCQuality knowledge corpus, and emits a findings report. The corpus is the source of citable, Microsoft-vetted BC quality rules; the central concern is that agents cite the matching BCQuality file rather than paraphrasing a rule from memory, vendor the corpus correctly, and keep project-specific house rules separate from cited Microsoft rules. This is a leaf action skill: it invokes no sub-skills.
 
-## What BCQuality is
+An orchestrator invokes this skill with a `repository` (a whole-repo audit of how the consuming project wires in BCQuality and how its agents cite it) or a `file-path` (a targeted re-check of one agent definition or one vendored consumption file). The skill produces a single JSON document conforming to the DO output contract.
 
-BCQuality is a Microsoft-maintained knowledge corpus for BC quality. It ships:
+## Source
 
-- **Meta-skills** at `bcquality/skills/`: `entry.md` (the dispatch entry point), `do.md` (output contract), `read.md` (knowledge file format), `write.md` (authoring guide).
-- **Microsoft-authored content** at `bcquality/microsoft/`:
-  - `skills/review/` ships seven review skills (`al-code-review`, `al-performance-review`, `al-privacy-review`, `al-security-review`, `al-style-review`, `al-ui-review`, `al-upgrade-review`).
-  - `knowledge/` ships hundreds of atomic, citable knowledge files grouped by area (`performance/`, `privacy/`, `security/`, `style/`, `testing/`, `ui/`, `upgrade/`). Each rule is `<rule>.md` plus paired `<rule>.bad.al` and `<rule>.good.al` examples.
-- **Partner layers** `community/` and `custom/`, populated in this fork: `community/` adds community-contributed performance and security rules, and `custom/` adds project-specific knowledge (api, integration, operations, performance, process) plus the review and testing skills.
+The rule set is the BCQuality consumption contract: how the corpus is vendored, how agents map to knowledge domains, the cite-over-paraphrase rule, the separation of house rules from cited rules, and the refresh procedure. These are integration rules about a consuming repo, not curated knowledge in this corpus, so they are not covered by the BCQuality knowledge domains. Read the BCQuality knowledge index once (the `knowledge-index.json` Entry's preparation step regenerates over the already-filtered clone); no curated domain maps onto consumption hygiene, so for each concrete violation emit an agent finding within this skill's integration-hygiene domain. Do not open individual article bodies at this step; open an article only once it enters the Worklist. The consuming-repo files this skill reasons about - `bcquality/agent-consumption.md`, the `agents/al-*.md` definitions, and the vendored tree under `.claude/bcquality/...` - live in the consumer project, not in this repo; they are referenced inline as prose, never as `references` frontmatter.
 
-The architecture is documented in `bcquality/agent-consumption.md`.
+## Relevance
 
-## How BCQuality is included
+Apply the frontmatter matching rules defined in READ against the task context:
 
-A Microsoft-authored subset of [BCQuality](https://github.com/EquerraNZ/community-BCQuality) is vendored directly into this repo as plain files under `.claude/bcquality/`. There is no submodule to initialise: the files are committed, so the agents can reference rules out of the box.
+- `bc-version` - the consuming app's target BC version from its `app.json`, or `unknown` if unavailable.
+- `technologies` - `[al]`.
+- `countries` - the countries declared in the consuming app's `app.json`; default to the orchestrator's configured context, else `unknown`.
+- `application-area` - the union of application areas declared by the consuming extension; pass the actual set, do not substitute `[all]`.
 
-## Vendored layout
+Discard tasks with no BCQuality-consuming repo to review. Retain conditionally applicable rules (any dimension `unknown`) only when configuration permits; findings derived from them have `confidence` no higher than `medium` and name the unknown dimension in the `message`.
 
-```
-<project>/
-  .claude/
-    bcquality/
-      skills/
-        entry.md
-        do.md
-        read.md
-        write.md
-        README.md
-      microsoft/
-        skills/review/
-          al-code-review.md
-          al-performance-review.md
-          al-privacy-review.md
-          al-security-review.md
-          al-style-review.md
-          al-ui-review.md
-          al-upgrade-review.md
-        knowledge/
-          performance/...
-          privacy/...
-          security/...
-          style/...
-          testing/...
-          ui/...
-          upgrade/...
-      LICENSE        (MIT)
-      README.md
-      agent-consumption.md
-```
+## Worklist
 
-The community/ and custom/ layers are not vendored (empty upstream). If Microsoft populates them in future, re-vendor from upstream to pick them up.
+Narrow the consumption contract to the artifacts present in the consuming repo or change under review. Group the candidate worklist by area:
 
-## How the agents use BCQuality knowledge
+- **Vendoring layout** - the Microsoft-authored subset is vendored as plain committed files under `.claude/bcquality/` (no submodule to initialise); the tree carries `skills/` (`entry.md`, `do.md`, `read.md`, `write.md`, `README.md`), `microsoft/skills/review/` (the seven review skills), `microsoft/knowledge/` (the area folders: `performance/`, `privacy/`, `security/`, `style/`, `testing/`, `ui/`, `upgrade/`, each rule as `<rule>.md` plus paired `<rule>.bad.al` / `<rule>.good.al`), `LICENSE` (MIT), `README.md`, and `agent-consumption.md`.
+- **Agent-to-domain mapping** - each verifier agent has a **Knowledge sources** section naming its relevant BCQuality folder(s): `al-code-quality-reviewer` to `performance/`, `security/`, `privacy/`; `al-readability-checker` to `style/`, `ui/`; `al-performance-reviewer` to `performance/`; `al-upgrade-checker` to `upgrade/`; `al-test-validator` to `testing/`; `al-test-coverage-validator` to none (coverage is structural). Agents without a one-to-one domain (`al-appsource-validator`, `al-multitenancy-reviewer`, `al-translation-auditor`, `al-permission-set-auditor`, `al-obsolete-tracker`, `al-event-subscriber-auditor`) report against their own rule ids with `references: []`.
+- **Cite-over-paraphrase** - when a finding maps onto an existing BCQuality knowledge file, the agent cites it via a `references[]` entry (with `path` relative to the consumer root and the pinned `sha`) rather than restating the rule from memory.
+- **House rules** - project-specific rules (no `ODataKeyFields`, the project's object ID range, telemetry pattern, subscriber naming) live in the `al-code-review` skill, applied in addition to BCQuality, and carry `references: []` with a rule slug prefixed `house:`.
+- **Refresh** - the vendored subset is re-vendored from upstream and committed (`chore: bump vendored BCQuality to <new-sha>`), with the diff reviewed because rule-content changes affect agent findings.
 
-Each verifier agent has a **Knowledge sources** section in its system prompt that names the relevant BCQuality folder. For example:
+A rule enters the worklist when the consuming repo's vendored tree, an agent definition, or a finding's reference shape touches its area.
 
-| Agent | Primary BCQuality folder(s) |
-|---|---|
-| `al-code-quality-reviewer` | `microsoft/knowledge/performance/`, `microsoft/knowledge/security/`, `microsoft/knowledge/privacy/` |
-| `al-readability-checker` | `microsoft/knowledge/style/`, `microsoft/knowledge/ui/` |
-| `al-performance-reviewer` | `microsoft/knowledge/performance/` |
-| `al-upgrade-checker` | `microsoft/knowledge/upgrade/` |
-| `al-test-validator` | `microsoft/knowledge/testing/` |
-| `al-test-coverage-validator` | none (coverage is structural; the agent supports the `references[]` field for forward-compatibility but does not cite knowledge by default) |
+## Action
 
-Agents without a one-to-one BCQuality domain (`al-appsource-validator`, `al-multitenancy-reviewer`, `al-translation-auditor`, `al-permission-set-auditor`, `al-obsolete-tracker`, `al-event-subscriber-auditor`) report against their own rule ids with `references: []` until matching knowledge files land upstream.
+For each worklist item, evaluate the consuming repo or change and emit findings. These are agent findings within this skill's integration-hygiene domain (`references: []`, `id` prefixed `agent:`, severity capped per `skills/do.md`), since no curated knowledge file covers BCQuality consumption:
 
-When the agent emits a finding that maps onto a BCQuality knowledge file, it includes a `references[]` entry in the output JSON:
+- A violation that breaks the audit trail or update-propagation guarantee is a `blocker`: an agent that paraphrases a rule from memory when a matching BCQuality knowledge file exists instead of citing it via `references[]` (the reviewer cannot open the bad/good examples, and the finding goes stale silently when Microsoft updates the rule), or a finding citing a `path` that does not resolve under `.claude/bcquality/`.
+- A mapping or hygiene fault is `major`: a verifier agent missing its **Knowledge sources** section or pointing at the wrong domain folder, a house rule emitted with a populated `references[]` (project rules must carry `references: []` and a `house:`-prefixed slug), or a project-specific rule cited as if it were Microsoft-vetted BCQuality content.
+- A weaker gap is `minor`: a refresh commit that does not pin or bump the `sha`, a vendored tree missing the `LICENSE` or `agent-consumption.md`, or a `references[]` entry that omits the `sha` needed to verify provenance.
+- When a rule is clearly applicable but no violation is detected, emit `info`.
+
+Set `confidence` to `high` for unambiguous structural matches (a missing `references[]` where a knowledge file plainly exists, an unresolvable path), `medium` for heuristic detections or when any frontmatter dimension was `unknown`, and `low` for applicability-only advisories. For mechanical fixes (add the `references[]` entry, prefix a house rule slug with `house:`, set `references: []`), emit `findings[].suggested-code` with the literal replacement; otherwise set `suggested-code-omission-reason`. Hold every agent finding to the precision bar in `skills/do.md`; when in doubt, omit. See `skills/do.md` for the full contract.
+
+Outcome selection: `completed` when every worklist item was evaluated (including an empty `findings` array); `no-knowledge` when no applicable rule survived Source, Relevance, and configuration filtering; `not-applicable` when the task context has no BCQuality-consuming repo to review; `partial` when a budget was hit before the worklist was exhausted; `failed` on an unrecoverable error (`outcome-reason` required).
+
+## Output
+
+Output conforms to the DO output contract. A populated example:
 
 ```json
 {
-  "passed": false,
-  "blocks": [
+  "skill": { "id": "bcquality-integration", "version": 1 },
+  "outcome": "completed",
+  "summary": {
+    "counts": { "blocker": 1, "major": 1, "minor": 0, "info": 0 },
+    "coverage": { "worklist-size": 5, "items-evaluated": 5 }
+  },
+  "findings": [
     {
-      "rule": "avoid-commit-inside-loops",
-      "file": "src/EventPostingMgt.al",
-      "line": 88,
-      "detail": "Commit() inside a foreach loop. Move outside or split the loop.",
-      "references": [
-        {
-          "path": ".claude/bcquality/microsoft/knowledge/performance/avoid-commit-inside-loops.md",
-          "sha": "35e02c2"
-        }
-      ]
+      "id": "agent:paraphrased-rule-instead-of-citing-bcquality",
+      "severity": "blocker",
+      "message": "al-code-quality-reviewer emits a Commit-inside-loop finding paraphrased from memory while .claude/bcquality/microsoft/knowledge/performance/avoid-commit-inside-loops.md exists. Per the cite-over-paraphrase rule the agent must cite the file via references[] so reviewers can open the bad/good examples and the finding inherits upstream updates. Recommendation: add the references[] entry with the vendored path and pinned sha.",
+      "location": { "file": "agents/al-code-quality-reviewer.md", "line": 64 },
+      "references": [],
+      "confidence": "high"
+    },
+    {
+      "id": "agent:house-rule-carries-references",
+      "severity": "major",
+      "message": "A project-specific 'no ODataKeyFields' rule is emitted with a populated references[]. House rules are not Microsoft-vetted BCQuality content; they must carry references: [] and a 'house:'-prefixed slug. Recommendation: set references: [] and rename the rule slug to house:no-odata-key-fields.",
+      "location": { "file": "agents/al-code-quality-reviewer.md", "line": 120 },
+      "references": [],
+      "confidence": "medium"
     }
-  ]
+  ],
+  "suppressed": []
 }
 ```
-
-The `path` is relative to the consumer project root. The `sha` is the BCQuality commit pinned in the lock file (also exposed via `lock.bcquality.sha`). Tools that render agent findings (Claude Code UI, CI annotations, PR comments) can use the path to link the reviewer to the rule and the SHA to verify provenance.
-
-## The cite-over-paraphrase rule
-
-When an agent finding maps onto an existing BCQuality knowledge file, the agent **must** cite it via `references[]` rather than paraphrasing the rule from memory. Two reasons:
-
-1. **Audit trail**. The reviewer (human or agent) can open the rule, see the bad/good AL examples, and verify the agent's interpretation.
-2. **Update propagation**. When Microsoft updates a rule, refreshing BCQuality changes the rule content. Cited findings inherit the update automatically; paraphrased findings go stale silently.
-
-Agents may add commentary alongside a citation (e.g. project-specific severity, suggested fix in the project's idiom), but the citation is mandatory when one exists.
-
-## House rules that BCQuality does not cover
-
-BCQuality is Microsoft-vetted neutral BC quality. Project-specific rules (no `ODataKeyFields`, the project's object ID range, the project's telemetry pattern, specific subscriber naming, etc.) live in the `al-code-review` skill and are applied **in addition** to BCQuality. Findings on project-specific rules carry an empty `references: []` and use a rule slug prefixed `house:` (e.g. `house:no-odata-key-fields`).
-
-## Refreshing BCQuality
-
-Re-vendor the subset under `.claude/bcquality/` from the latest upstream [EquerraNZ/community-BCQuality](https://github.com/EquerraNZ/community-BCQuality), then commit the updated files:
-
-```bash
-git add .claude/bcquality
-git commit -m "chore: bump vendored BCQuality to <new-sha>"
-```
-
-Review the diff before merging, since rule-content changes can affect agent findings.
-
-## License
-
-BCQuality is MIT-licensed (Microsoft Corporation). The `LICENSE` file is vendored alongside the content. No attribution beyond that file is required for use; this skill credits Microsoft as the upstream author.
-
-## See also
-
-- BCQuality repository: https://github.com/EquerraNZ/community-BCQuality
-- BCQuality agent consumption guide: `.claude/bcquality/agent-consumption.md` (in consumer projects)
-- Agents that cite BCQuality: `agents/al-code-quality-reviewer.md`, `agents/al-readability-checker.md`, `agents/al-test-validator.md`, `agents/al-test-coverage-validator.md`
