@@ -1,6 +1,6 @@
 ---
 kind: task-skill
-id: spec-init
+id: al-spec-init
 version: 1
 title: Scaffold the SDD constitution
 description: Scaffold or refresh the Spec-Driven Development constitution (specs/brief.md, specs/tech-design.md, specs/roadmap.md) for a Business Central solution. Use once at the start of a project, or when the high-level business need changes. Run before writing any feature spec.
@@ -39,7 +39,7 @@ starts. See `AGENTS.md` for the full workflow.
 5. **Write `specs/roadmap.md`:** an ordered, numbered feature list with status
    `todo`. Number features so folders match (`001-...`, `002-...`).
 6. **Stop for review.** The constitution is a human decision. Summarise what you
-   wrote and the open questions; do not proceed to `/spec-feature` until the user
+   wrote and the open questions; do not proceed to `/al-spec-feature` until the user
    confirms.
 
 ## Output
@@ -49,5 +49,5 @@ made and questions still open. No AL is written in this step.
 
 ## Related
 
-- `/spec-feature` to specify the first roadmap feature once the constitution is approved.
+- `/al-spec-feature` to specify the first roadmap feature once the constitution is approved.
 - `al-code-review` for the house rules the technical design must respect.

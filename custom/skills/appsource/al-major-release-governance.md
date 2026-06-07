@@ -1,6 +1,6 @@
 ---
 kind: task-skill
-id: major-release-readiness
+id: al-major-release-governance
 version: 1
 title: Govern a BC major version upgrade
 description: Governance for Business Central major version upgrades. Use when planning compatibility testing for a new BC major, deciding whether to cut a NextMajor branch, or reviewing a PR that bumps `app.json` application or platform versions.

@@ -1,9 +1,9 @@
 ---
 kind: task-skill
-id: plan-feature
+id: al-plan-feature
 version: 1
 title: Produce a feature plan and task list
-description: Produce the technical plan and ordered task list (plan.md + tasks.md) for a Business Central feature whose spec.md is approved. Maps the spec to AL objects, an object ID range, a data model, and verifiable tasks. Use after /spec-feature and before /implement-feature.
+description: Produce the technical plan and ordered task list (plan.md + tasks.md) for a Business Central feature whose spec.md is approved. Maps the spec to AL objects, an object ID range, a data model, and verifiable tasks. Use after /al-spec-feature and before /al-implement-feature.
 bc-version: [all]
 technologies: [al]
 countries: [w1]
@@ -18,7 +18,7 @@ the bridge from what to how. No production AL is written yet. See `AGENTS.md`.
 ## Preconditions
 
 `specs/features/<id>/spec.md` exists and is approved. If acceptance criteria or
-open questions are unresolved, go back to `/spec-feature` first.
+open questions are unresolved, go back to `/al-spec-feature` first.
 
 ## Steps
 
@@ -49,6 +49,6 @@ open questions are unresolved, go back to `/spec-feature` first.
 
 ## Related
 
-- `al-code-review` (house rules), `performance-profiler`, `major-release-readiness`
-  (if the plan changes schema), `appsource-validation` (if bound for AppSource).
-- `/implement-feature` once the plan is approved.
+- `al-code-review` (house rules), `performance-profiler`, `al-major-release-governance`
+  (if the plan changes schema), `al-appsource-validation` (if bound for AppSource).
+- `/al-implement-feature` once the plan is approved.

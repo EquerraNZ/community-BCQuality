@@ -1,6 +1,6 @@
 ---
 kind: task-skill
-id: appsource-validation
+id: al-appsource-validation
 version: 1
 title: Validate a BC extension for AppSource submission
 description: Validate a Business Central extension for AppSource submission against the marketplace checklist.
