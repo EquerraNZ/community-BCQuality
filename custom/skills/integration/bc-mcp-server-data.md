@@ -1,61 +1,69 @@
 ---
-kind: task-skill
+kind: action-skill
 id: bc-mcp-server-data
 version: 1
-title: Expose BC API pages via the product MCP server
-description: Configure Business Central's product MCP server to expose API pages as tools for AI clients (Copilot Studio, Claude, ChatGPT, custom agents). Use when designing which BC entities and operations should be reachable from outside agents.
+title: BC Product MCP Server Configuration Review
+description: Reviews a Business Central product MCP server configuration for the API surface, operation permissions, and client authentication it exposes, and emits a findings report.
+inputs: [repository, file-path]
+outputs: [findings-report]
 bc-version: [all]
 technologies: [al]
 countries: [w1]
 application-area: [all]
 ---
 
-# BC MCP Server (data and business logic)
+# BC Product MCP Server Configuration Review
 
-Business Central runs its own MCP server at `https://mcp.businesscentral.dynamics.com`. This skill is about configuring it: which API pages to expose, what operations to allow, how clients authenticate. Distinct from the AL MCP Server, which is a developer tool.
+Reviews a Business Central product MCP server configuration and emits a findings report. Business Central runs its own MCP server at `https://mcp.businesscentral.dynamics.com`; this skill audits how it is configured: which API pages are exposed, what CRUD operations are allowed, whether the tool surface is safe, and how clients authenticate. It is distinct from the AL MCP Server, which is a developer tool. This is a leaf action skill: it invokes no sub-skills.
 
-## When to use
+An orchestrator invokes this skill with a `repository` (an exported MCP configuration JSON checked into the repo, or a whole-extension audit of the API pages that back it) or a `file-path` (a single exported configuration). The skill produces a single JSON document conforming to the DO output contract.
 
-- Designing the surface a Copilot Studio agent, Claude, or ChatGPT should see for a BC tenant
-- Deciding which APIs become MCP tools and what CRUD they allow
-- Sharing a configuration across customers (export/import JSON)
-- Diagnosing "the agent cannot see this entity" or "I can read but cannot write"
+## Source
 
-## Scope
+The rule set is this skill's own product-MCP configuration guidance, plus the `security` and `integration` knowledge domains in BCQuality where a configuration concern maps onto a curated rule (over-broad write permissions, exposure of data that should stay internal). Read the BCQuality knowledge index once and take the `security` and `integration` domain entries as the citable candidate set across every enabled layer; do not open an article's body until it enters the Worklist. The MCP-product configuration switches and naming behaviour are not vendored in the corpus; for a concrete violation there, emit an agent finding within this skill's MCP-configuration domain (`references: []`, `id` prefixed `agent:`).
 
-- BC online (SaaS) only. Not supported on on-prem.
-- Endpoint constant: `https://mcp.businesscentral.dynamics.com`. Every customer connects to the same URL with headers selecting the tenant, environment, company, and configuration name.
+## Relevance
 
-## Where the configuration lives
+Apply the frontmatter matching rules defined in READ against the task context:
 
-Page **8351** in Business Central: `Model Context Protocol (MCP) Server Configurations`. Direct link: https://businesscentral.dynamics.com/?page=8351.
+- `bc-version` - the BC version of the environment the configuration targets, or `unknown`. The product MCP server is BC online (SaaS) only; an on-prem target is `not-applicable`.
+- `technologies` - `[al]`; the exposed surface is BC API pages.
+- `countries` - from the environment's app context, else `unknown`.
+- `application-area` - the areas covered by the exposed API pages; pass the actual set, do not substitute `[all]`.
 
-Requires the `MCP - ADMIN` permission set on the user editing configurations.
+Retain conditionally applicable rules (any dimension `unknown`) only when configuration permits; cap their findings at `medium` confidence and name the unknown dimension.
 
-## Per-configuration switches
+## Worklist
+
+The configuration lives on Page **8351** (`Model Context Protocol (MCP) Server Configurations`); the reviewable artifact is its exported JSON or the connection string. A concern enters the worklist when the configuration or the API pages backing it touch its area:
+
+- **Per-configuration switches** - `Active`, `Dynamic Tool Mode`, `Discover Additional Objects`, `Unblock Edit Tools`.
+- **Per-tool (per-API page) permissions** - `Allow Read`, `Allow Create`, `Allow Modify`, `Allow Delete`, `Allow Bound Actions`.
+- **Exposed page eligibility** - only top-level API pages; `ListPart` and `CardPart` subpages are unsupported.
+- **Tool-count ceiling** - Copilot Studio's 70-tool cap and the static-vs-dynamic tool-naming choice.
+- **Connection string and headers** - `TenantId`, `EnvironmentName`, `Company`, `ConfigurationName`.
+- **Authentication** - OAuth 2.0 Authorization Code with PKCE; Entra app registration for non-Microsoft clients.
+
+## Action
+
+For each worklist item, evaluate the configuration and emit findings. Cite a `security` or `integration` knowledge file in `references` when one matches; otherwise emit an agent finding within this skill's domain.
+
+### Per-configuration switches
 
 | Switch | What it does |
 |---|---|
 | Active | Configuration is selectable from MCP clients |
-| Dynamic Tool Mode | Replaces static tool list with `bc_actions_search`, `bc_actions_describe`, `bc_actions_invoke`. Required if you exceed Copilot Studio's 70-tool cap |
+| Dynamic Tool Mode | Replaces the static tool list with `bc_actions_search`, `bc_actions_describe`, `bc_actions_invoke`. Required if you exceed Copilot Studio's 70-tool cap |
 | Discover Additional Objects | Only meaningful when Dynamic Tool Mode is on |
 | Unblock Edit Tools | Master switch: when off, all per-API Create/Modify/Delete/Bound Action permissions are ignored (read-only) |
 
-## Per-tool (per-API page) permissions
+### Per-tool permissions and the write gate
 
-Each API page added to the configuration has:
+The default for a newly-added page is read-only. Enabling write requires `Unblock Edit Tools` on at the configuration level AND the specific permission ticked per page. Flag a configuration that opens Create/Modify/Delete on an entity whose agent workflow does not require it as a `major` over-exposure; flag write on a sensitive master or setup entity (vendors, payment setup, permissions) without a documented need as a `blocker`.
 
-- `Allow Read`
-- `Allow Create`
-- `Allow Modify`
-- `Allow Delete`
-- `Allow Bound Actions`
+### Tool naming and the 70-tool cap
 
-Default for a newly-added page is read-only. Enabling write requires `Unblock Edit Tools` to be on at the configuration level AND the specific permission ticked per page.
-
-## Static vs dynamic tool naming
-
-With **Dynamic Tool Mode OFF**, each API page generates up to five static tools:
+With Dynamic Tool Mode OFF, each API page generates up to five static tools:
 
 ```
 List<EntityName>_PAG<ID>          # if Allow Read
@@ -65,7 +73,7 @@ Delete<EntityName>_PAG<ID>        # if Allow Delete
 <BoundActionName>_PAG<ID>         # each allowed bound action
 ```
 
-With **Dynamic Tool Mode ON**, only three meta-tools are exposed:
+With Dynamic Tool Mode ON, only three meta-tools are exposed:
 
 ```
 bc_actions_search        # find available actions by keyword
@@ -73,81 +81,57 @@ bc_actions_describe      # get the schema for a specific action
 bc_actions_invoke        # call it with parameters
 ```
 
-This is the way to expose more than 70 tools in Copilot Studio (which caps at 70).
+A configuration that exceeds (or will exceed) 70 static tools without Dynamic Tool Mode is a `major`: Copilot Studio caps at 70 and silently drops the overflow.
 
-## What pages CANNOT be MCP tools
+### Page eligibility
 
-- API pages of subtype `ListPart` or `CardPart` are not supported.
-- Only top-level API pages. Subparts won't be picked up.
+API pages of subtype `ListPart` or `CardPart` are not supported, and only top-level API pages are picked up. A configuration referencing a part page is a `minor` (the tool will not appear); the fix is to wrap the same source table in a top-level API page.
 
-If you need to expose a part page's data, add a top-level API page that wraps the same source table.
+### Connection string and authentication
 
-## Connection string
+The connection string from `Advanced > Connection String` carries `TenantId`, `EnvironmentName`, `Company`, and an optional `ConfigurationName`. Authentication is OAuth 2.0 Authorization Code with PKCE against Entra ID; Microsoft clients (VS Code, Copilot Studio) use a pre-registered application, while non-Microsoft clients (Claude, ChatGPT, custom) must register their own Entra application. All operations run as the signed-in user's identity, so the audit trail shows who did what. Flag a checked-in connection string or exported configuration that embeds a secret, or any reliance on a shared service-account identity that defeats per-user audit, as a `blocker`. See `rbac-and-access` for the Entra app-registration patterns when wiring non-Microsoft clients.
 
-Get it from page 8351 > **Advanced** > **Connection String**. Shape:
+### Recommended defaults (flag deviations)
+
+- One configuration per intended audience (e.g. `SalesTeamConfig`, `WarehouseAgentConfig`); a single mega-configuration is a `minor`.
+- Default every API to Read; open Create/Modify/Delete one entity at a time, only when the workflow requires it.
+- Turn on Dynamic Tool Mode for any configuration exceeding 20 APIs, to future-proof against the 70-tool cap.
+- Each configuration documents its audience and intended use.
+
+Set `confidence` to `high` for unambiguous switch/permission matches in the exported JSON, `medium` for heuristic detections or when any frontmatter dimension was `unknown`, and `low` for applicability-only advisories. Provide `suggested-code` only for mechanical, local JSON edits (flip a write permission off, set a header); otherwise set `suggested-code-omission-reason`. See `skills/do.md` for the full contract. For the developer-tool MCP, see `al-mcp-server`; for in-product Copilot UX, see `copilot-promptdialog`.
+
+Outcome selection: `completed` when every worklist item was evaluated (including an empty `findings` array); `no-knowledge` when no applicable rule survived Source, Relevance, and configuration filtering; `not-applicable` when the target is on-prem or no MCP configuration is present; `partial` when a budget was hit before the worklist was exhausted; `failed` on an unrecoverable error (`outcome-reason` required).
+
+## Output
+
+Output conforms to the DO output contract. A populated example:
 
 ```json
 {
-  "businesscentral": {
-    "url": "https://mcp.businesscentral.dynamics.com",
-    "type": "http",
-    "headers": {
-      "TenantId": "<entra-tenant-guid>",
-      "EnvironmentName": "Production",
-      "Company": "CRONUS USA, Inc.",
-      "ConfigurationName": "MyMCPConfig"
+  "skill": { "id": "bc-mcp-server-data", "version": 1 },
+  "outcome": "completed",
+  "summary": {
+    "counts": { "blocker": 1, "major": 1, "minor": 0, "info": 0 },
+    "coverage": { "worklist-size": 6, "items-evaluated": 6 }
+  },
+  "findings": [
+    {
+      "id": "agent:mcp-write-on-sensitive-entity-without-justification",
+      "severity": "blocker",
+      "message": "The exported MCP configuration enables Allow Modify and Allow Delete on the Payment Method API page with Unblock Edit Tools on, and no documented agent workflow requires write access to payment setup. Recommendation: set this entity back to read-only and open write only for the specific entity a documented workflow needs.",
+      "location": { "file": "mcp/WarehouseAgentConfig.json", "line": 34 },
+      "references": [],
+      "confidence": "high"
+    },
+    {
+      "id": "agent:mcp-exceeds-static-tool-cap",
+      "severity": "major",
+      "message": "The configuration exposes 31 API pages with Dynamic Tool Mode off, generating more than 70 static tools, so Copilot Studio will silently drop the overflow. Recommendation: turn on Dynamic Tool Mode to expose the three meta-tools instead.",
+      "location": { "file": "mcp/SalesTeamConfig.json", "line": 4 },
+      "references": [],
+      "confidence": "high"
     }
-  }
+  ],
+  "suppressed": []
 }
 ```
-
-| Header | Purpose |
-|---|---|
-| `TenantId` | Entra tenant GUID |
-| `EnvironmentName` | BC environment name |
-| `Company` | Company within the environment |
-| `ConfigurationName` | (Optional) name of the MCP server configuration to use |
-
-## Authentication
-
-OAuth 2.0 Authorization Code with PKCE. Entra ID is the authorization server.
-
-- Microsoft MCP clients (VS Code, Copilot Studio) use a pre-registered application. No setup.
-- Non-Microsoft clients (Claude, ChatGPT, custom) must register their own Entra application and configure the MCP client with its client ID.
-
-All operations run as the signed-in user's identity. Audit trails show who did what.
-
-## Export / Import
-
-`Advanced > Export` saves the configuration as JSON. Edit and re-import via `Advanced > Import` to create a new configuration, or share across environments. Useful for promoting configs from dev to test to prod.
-
-## Recommended defaults
-
-When wiring a new customer for AI use:
-
-- Start with one configuration per intended audience (e.g. `SalesTeamConfig`, `WarehouseAgentConfig`). Avoid one mega-configuration.
-- Default every API to Read. Open Create/Modify/Delete one entity at a time, only when the agent's workflow requires it.
-- Turn on **Dynamic Tool Mode** for any configuration that exceeds 20 APIs. Future-proofs against the 70-tool cap.
-- Document each configuration's audience and intended use in a Monday card or the configuration's Description.
-- Quarterly review: who has access, what's enabled, is the audit trail clean.
-
-## Common confusions
-
-| Question | Answer |
-|---|---|
-| Why can the agent read but not create? | `Unblock Edit Tools` is off at the configuration level, OR `Allow Create` is off for that API. Both required. |
-| Where is the part page I exposed? | ListPart and CardPart are not supported. Use a top-level API page. |
-| Why does Copilot Studio show only 70 tools? | Hard product limit. Turn on Dynamic Tool Mode. |
-| Does the agent run as me or as a service account? | As your signed-in user. All operations carry your identity in the audit log. |
-
-## Related skills
-
-- `al-mcp-server` for the developer-tool MCP, distinct from this product MCP
-- `copilot-promptdialog` for in-product Copilot UX (different surface)
-- `rbac-and-access` for Entra app registration patterns when wiring non-Microsoft clients
-
-## References
-
-- MCP overview: https://learn.microsoft.com/dynamics365/business-central/dev-itpro/ai/mcp-overview
-- Configure: https://learn.microsoft.com/dynamics365/business-central/dev-itpro/ai/configure-mcp-server
-- MCP spec: https://modelcontextprotocol.io/specification/2025-11-25

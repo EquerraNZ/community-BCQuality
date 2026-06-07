@@ -1,134 +1,94 @@
 ---
-kind: task-skill
+kind: action-skill
 id: al-go-environment-onboarding
 version: 1
-title: Register a BC environment for AL-Go deployment
-description: Register a customer Business Central sandbox or production environment for AL-Go deployment. Use when adding a new customer environment to an AL-Go repo, or troubleshooting a "deploy did not run" or "deployed version is wrong" situation.
+title: AL-Go Environment Onboarding Review
+description: Reviews how a Business Central environment is wired into an AL-Go repo for deployment and emits a findings report.
+inputs: [repository, file-path]
+outputs: [findings-report]
 bc-version: [all]
 technologies: [al, powershell]
 countries: [w1]
 application-area: [all]
 ---
 
-# AL-Go Environment Onboarding
+# AL-Go Environment Onboarding Review
 
-End-to-end setup to wire a Business Central environment into an AL-Go repo so CI/CD can deploy to it. Covers Entra App Registration, BC user provisioning, GitHub environment with `AUTHCONTEXT`, and the AL-Go settings block.
+Reviews how a Business Central environment is registered for AL-Go deployment - the Entra App Registration, the BC application user, the GitHub environment with its `AUTHCONTEXT` secret, and the `DeployTo<Env>` block in AL-Go settings - and emits a findings report. The governing concern is that a misconfigured environment fails silently: a Continuous Deployment run that did not fire, fired but deployed nothing, or deployed the wrong version. This is a leaf action skill: it invokes no sub-skills.
 
-## When to use
+An orchestrator invokes this skill with a `repository` (a whole-repo audit of the environment wiring before or after onboarding a customer environment) or a `file-path` (a targeted re-check of `.github/AL-Go-Settings.json` alone). The skill produces a single JSON document conforming to the DO output contract.
 
-- Adding a new customer sandbox or production environment to an AL-Go repo
-- Promoting an internal sandbox to a customer-facing one
-- Diagnosing a Continuous Deployment run that did not fire, or fired but deployed nothing
-- Validating that environment-specific versioning is set correctly
+## Source
 
-## Pre-requisites
+The rule set is the AL-Go environment-onboarding procedure: Entra App Registration (S2S) correctness, BC application-user provisioning, the GitHub environment and its `AUTHCONTEXT` secret, the `DeployTo<Env>` settings block, and explicit versioning. None of this is covered by the curated BCQuality knowledge domains - it is deployment governance specific to the AL-Go framework. Read the BCQuality knowledge index once (the `knowledge-index.json` Entry's preparation step regenerates over the already-filtered clone); no curated domain maps onto environment wiring, so for each concrete violation emit an agent finding within this skill's deployment-onboarding domain. Do not open individual article bodies at this step; open an article only once it enters the Worklist.
 
-- Admin access on the target AL-Go repo
-- BC admin access to the customer tenant (or coordination with the customer)
-- The shared Entra App Registration `BC-CICD-NonProd` (or its production equivalent)
+## Relevance
 
-## Step-by-step
+Apply the frontmatter matching rules defined in READ against the task context:
 
-### 1. Entra App Registration (S2S authentication)
+- `bc-version` - the target BC version from the extension's `app.json`, or `unknown` if unavailable.
+- `technologies` - `[al, powershell]` (AL-Go orchestration runs PowerShell over an AL extension).
+- `countries` - the countries declared in the app's `app.json`; default to the orchestrator's configured context, else `unknown`.
+- `application-area` - the union of application areas declared by the extension; pass the actual set, do not substitute `[all]`.
 
-Use the existing shared app registration where possible, do not create a new one per customer.
+Discard tasks with no AL-Go repo to review. Retain conditionally applicable rules (any dimension `unknown`) only when configuration permits; findings derived from them have `confidence` no higher than `medium` and name the unknown dimension in the `message`.
 
-- App name: `BC-CICD-NonProd` (for sandbox) or production equivalent
-- Auth type: Service-to-Service (S2S) using client credentials
-- API permissions: `Dynamics 365 Business Central` > `app_access` (application permission), granted with admin consent
+## Worklist
 
-Capture:
-- Tenant ID
-- Client ID
-- A fresh client secret (note the expiry, set a calendar reminder to rotate)
+Narrow the onboarding procedure to the artifacts present in the repo or change under review. Group the candidate worklist by area:
 
-### 2. BC user setup for the App Registration
+- **Entra App Registration (S2S)** - a shared registration (`BC-CICD-NonProd` or its production equivalent) is reused rather than a per-customer app; auth is Service-to-Service client credentials; the `Dynamics 365 Business Central` `app_access` application permission is granted with admin consent; the client secret has a tracked expiry.
+- **BC application user** - an Application-type user exists in both Production and Sandbox with `D365 AUTOMATION` and `EXTEN. MGT. - ADMIN` permission sets; the user is disabled in Production and enabled in Sandbox.
+- **GitHub environment** - the environment name matches the BC environment name character for character; an `AUTHCONTEXT` environment secret carries a whitespace-free JSON payload with all four fields (`tenantId`, `scopes`, `clientId`, `clientSecret`).
+- **DeployTo<Env> block** - `.github/AL-Go-Settings.json` lists the environment in `environments` and defines a `DeployTo<EnvName>` block with `EnvironmentType` (`SaaS` for customer environments), an `EnvironmentName` matching both the BC and GitHub names, `Branches` that include the branch meant to deploy, `SyncMode`, and `ContinuousDeployment` set appropriately.
+- **Versioning** - versioning is defined explicitly in AL-Go settings rather than inherited from AL-Go defaults; the deployed version is validated against `app.json`.
 
-Create the corresponding BC user in both Production and Sandbox environments of the customer tenant.
+A rule enters the worklist when the repo's settings, secrets, or environment configuration touches its area.
 
-- User type: Application
-- Assign permission sets:
-  - `D365 AUTOMATION`
-  - `EXTEN. MGT. - ADMIN`
-- In **Production**, disable the user. AL-Go CI/CD only deploys to non-production unless you explicitly opt in. Leaving the user enabled in production is an outage risk.
-- In **Sandbox**, leave enabled.
+## Action
 
-### 3. GitHub environment
+For each worklist item, evaluate the environment wiring and emit findings. These are agent findings within this skill's deployment-onboarding domain (`references: []`, `id` prefixed `agent:`, severity capped per `skills/do.md`), since no curated knowledge file covers AL-Go environment setup:
 
-In the AL-Go repo: **Settings > Environments > New environment**.
+- A wiring fault that makes deployment fail or deploy incorrectly is a `blocker`: the BC application user left enabled in Production (an outage risk), a GitHub environment name that does not match the BC environment name, an `AUTHCONTEXT` secret missing one of its four fields or containing whitespace, or reliance on AL-Go inherited defaults for versioning (which has deployed older or partial versions).
+- A misconfiguration that suppresses or misroutes a deploy is `major`: `Branches` in `DeployTo<Env>` not including the pushed branch (CD does not run), `ContinuousDeployment: false` when continuous deployment was intended (CD runs but nothing deploys), an App Registration that is not admin-consented, or the BC user disabled in the target environment (401 from BC).
+- A hygiene gap that weakens the setup without breaking it is `minor`: a per-customer App Registration created where the shared one would do, a client secret with no tracked expiry/rotation reminder, or skipping a continuous-deployment test on a throwaway sandbox before wiring a real customer environment.
+- When a rule is clearly applicable but no violation is detected, emit `info`.
 
-- Name: **exactly** the BC environment name. The names must match character for character. If your BC sandbox is `Test-NZ`, the GitHub environment is `Test-NZ`.
-- Add environment secret `AUTHCONTEXT` with a compressed JWT payload:
+Set `confidence` to `high` for unambiguous settings/secret-shape matches, `medium` for heuristic detections or when any frontmatter dimension was `unknown`, and `low` for applicability-only advisories. For mechanical fixes (flip `ContinuousDeployment` to `true`, add the missing branch to `Branches`, correct a mismatched `EnvironmentName`), emit `findings[].suggested-code` with the literal replacement; otherwise set `suggested-code-omission-reason`. Hold every agent finding to the precision bar in `skills/do.md` - emit only a concrete, material wiring defect; when in doubt, omit. See `skills/do.md` for the full contract.
 
-```json
-{
-  "tenantId": "<entra-tenant-guid>",
-  "scopes": "https://api.businesscentral.dynamics.com/.default",
-  "clientId": "<app-registration-client-id>",
-  "clientSecret": "<app-registration-client-secret>"
-}
-```
+Outcome selection: `completed` when every worklist item was evaluated (including an empty `findings` array); `no-knowledge` when no applicable rule survived Source, Relevance, and configuration filtering; `not-applicable` when the task context has no AL-Go repo to review; `partial` when a budget was hit before the worklist was exhausted; `failed` on an unrecoverable error (`outcome-reason` required).
 
-Compress with no whitespace (no newlines) and paste as the secret value. Some teams base64 the JSON; AL-Go accepts both, follow whichever convention the rest of your AL-Go repos use.
+## Output
 
-### 4. AL-Go-Settings.json deploy block
-
-In `.github/AL-Go-Settings.json`, add the environment to the `environments` array and create a `DeployTo<EnvName>` block:
+Output conforms to the DO output contract. A populated example:
 
 ```json
 {
-  "environments": ["Test-NZ"],
-  "DeployToTest-NZ": {
-    "EnvironmentType": "SaaS",
-    "EnvironmentName": "Test-NZ",
-    "Branches": ["main"],
-    "SyncMode": "Add",
-    "ContinuousDeployment": true,
-    "runs-on": "windows-latest"
-  }
+  "skill": { "id": "al-go-environment-onboarding", "version": 1 },
+  "outcome": "completed",
+  "summary": {
+    "counts": { "blocker": 1, "major": 1, "minor": 0, "info": 0 },
+    "coverage": { "worklist-size": 5, "items-evaluated": 5 }
+  },
+  "findings": [
+    {
+      "id": "agent:bc-application-user-enabled-in-production",
+      "severity": "blocker",
+      "message": "The AL-Go application user is enabled in the customer Production environment. AL-Go CI/CD only deploys to non-production unless explicitly opted in; leaving the user enabled in Production is an outage risk. Recommendation: disable the Application-type user in Production and keep it enabled only in Sandbox.",
+      "location": { "file": ".github/AL-Go-Settings.json", "line": 4 },
+      "references": [],
+      "confidence": "medium"
+    },
+    {
+      "id": "agent:deployto-branches-excludes-pushed-branch",
+      "severity": "major",
+      "message": "DeployToTest-NZ defines Branches without 'main', so a push to main never triggers Continuous Deployment. Recommendation: add the deploying branch to Branches and run Update AL-Go System Files.",
+      "location": { "file": ".github/AL-Go-Settings.json", "line": 8 },
+      "references": [],
+      "confidence": "high",
+      "suggested-code": "    \"Branches\": [\"main\"],"
+    }
+  ],
+  "suppressed": []
 }
 ```
-
-Key fields:
-
-| Field | Notes |
-|---|---|
-| `EnvironmentType` | `SaaS` for customer environments, `OnPrem` only when you have a runner on the customer network |
-| `EnvironmentName` | Must match BC environment name AND the GitHub environment name |
-| `Branches` | Which branches deploy to this environment. `main` for permanent sandbox, release branches for production |
-| `SyncMode` | `Add` for additive deploys, `Clean` for full sync. Default `Add` unless schema changes require otherwise |
-| `ContinuousDeployment` | `true` to deploy on every push that matches `Branches`, `false` for manual-only |
-
-### 5. Versioning
-
-Always define versioning explicitly in the AL-Go settings. Do not rely on AL-Go's inherited defaults: they have surprised teams (deploying older versions, or partial deploys).
-
-Validate by running CI/CD on `main` once and confirming the deployed version on the BC environment matches `app.json` in the repo.
-
-## Common failure modes
-
-| Symptom | Cause | Fix |
-|---|---|---|
-| CD did not run on push | `Branches` in `DeployTo<Env>` does not include the pushed branch | Add the branch, run **Update AL-Go System Files** |
-| CD ran but nothing deployed | `ContinuousDeployment: false` | Flip to `true` |
-| Wrong version deployed | Relied on AL-Go inherited defaults | Define `appBuild`, `appRevision`, and version policy in settings explicitly |
-| 401 from BC | App registration not consented, or BC user disabled in target env | Re-grant admin consent, enable the BC application user in the target env |
-| Auth context invalid | JSON whitespace or missing field | Recompress, validate the four fields are present and the secret matches |
-
-## Test continuous deployment early
-
-Test CD on a throwaway sandbox before you wire up a customer's real environment. Confirms:
-- The Entra app registration is consented
-- The BC user has the right permission sets
-- The GitHub environment name exactly matches BC
-- The deploy block routes the right branch
-
-## Related skills
-
-- `al-go-pipelines` for the broader AL-Go framework
-- `rbac-and-access` for managing the Entra app registration cleanly
-- `security-group-setup` for restricting access on the deployed environment
-
-## References
-
-- AL-Go docs on environments: https://github.com/microsoft/AL-Go/blob/main/Scenarios/Setup.md

@@ -22,7 +22,3 @@ Check feasibility against the limits before committing: confirm the desired rest
 ## Anti Pattern
 
 Promising or attempting a restore without checking the limits, or assuming the restored environment comes up exactly as it was. The consequences: a restore that is simply not allowed (cross-region, localisation change, sandbox to production, outside the 28-day window, or over the monthly cap), or a customer surprised that integrations are off and post-restore work is gone. The signal: a restore committed to before the restore point, region, localisation, path, and retention window have been confirmed, or a hand-off that does not warn about disabled integrations and lost post-restore-point work.
-
-## See also
-
-- `restrict-bc-environments-with-an-entra-security-group.md`

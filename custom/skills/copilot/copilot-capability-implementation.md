@@ -1,248 +1,111 @@
 ---
-kind: task-skill
+kind: action-skill
 id: copilot-capability-implementation
 version: 1
-title: Implement a BC Copilot capability with System.AI
-description: Build the AL side of a Business Central Copilot feature using the System.AI module (Azure OpenAI wrapper). Use when implementing the AOAI call behind a PromptDialog, registering a Copilot capability, choosing billing type, or rotating secrets.
+title: BC Copilot Capability Implementation Review
+description: Reviews the AL implementation of a Business Central Copilot capability built on the System.AI Azure OpenAI module and emits a findings report.
+inputs: [pr-diff, file-path]
+outputs: [findings-report]
 bc-version: [all]
 technologies: [al]
 countries: [w1]
 application-area: [all]
 ---
 
-# Copilot Capability Implementation (AL → Azure OpenAI)
+# BC Copilot Capability Implementation Review
 
-How to wire the AL side of a Copilot feature: registering the capability, configuring the Azure OpenAI call, constructing prompts, and parsing responses. Pairs with `copilot-promptdialog` for the UX.
+Reviews the AL side of a Business Central Copilot feature built on the `System.AI` module (the Azure OpenAI wrapper): capability registration, billing-type selection, key storage, the chat-completion call, prompt construction, and token budgeting. It emits a findings report. This is a leaf action skill: it invokes no sub-skills.
 
-## When to use
+An orchestrator invokes this skill with either a `pr-diff` (the standard PR-review entry point for a Copilot capability change) or a `file-path` (single-file review of an install codeunit, setup table, or the generation codeunit). The skill produces a single JSON document conforming to the DO output contract.
 
-- Implementing the AL code behind a Copilot feature
-- Registering a new Copilot capability so it appears in the Copilot & agent capabilities page
-- Choosing between `Microsoft Billed`, `Custom Billed`, and `Not Billed` billing types
-- Diagnosing "the capability is not registered" or "billing type validation failed"
-- Storing the Azure OpenAI key safely
+## Source
 
-## Prerequisites
+The rule set is this skill's own Copilot-capability knowledge plus BCQuality knowledge entries whose domain covers the concerns it touches (security for secret handling and `DataClassification`, style for user-facing labels). Read the BCQuality knowledge index once and take the `security` and `style` domain entries as the citable candidate set across every enabled layer; do not open an article body until it enters the Worklist. The `System.AI` API contract, the billing-type validation matrix, and the capability-registration lifecycle are not covered by the corpus; for a concrete violation there, emit an agent finding within this skill's Copilot-capability domain.
 
-- Azure OpenAI resource: URL (`https://<resourcename>.openai.azure.com/`), Deployment Name, API key
-- BC AL runtime with `System.AI` module available
-- A registered Copilot Capability enum value (see "Register the capability" below)
+## Relevance
 
-The `System.AI` module wraps Azure OpenAI. Supports text completion, chat completion, embeddings. No DALL-E (images), no Whisper (speech).
+Apply the frontmatter matching rules defined in READ against the task context:
 
-## Register the capability
+- `bc-version` - the target BC version from the consuming app's `app.json`, or `unknown`.
+- `technologies` - `[al]`.
+- `countries` - from the app's `app.json`, else `unknown`.
+- `application-area` - the union of areas declared by the changed objects; pass the actual set.
 
-Every Copilot feature must extend the `Copilot Capability` enum AND register at install time. Without registration, calls fail with "capability not registered".
+Discard files not applicable to AL. Retain conditionally applicable rules (any dimension `unknown`) only when configuration permits; cap their findings at `medium` confidence and name the unknown dimension.
 
-### Extend the enum
+## Worklist
 
-```al
-enumextension 50300 "My Copilot Caps" extends "Copilot Capability"
+Narrow to the rules that apply to the change under review. A rule enters the worklist when the diff or file touches its area:
+
+- **Capability registration** - an `enumextension` of `Copilot Capability` exists and is registered at install, guarded by both `IsSaaSInfrastructure()` and `IsCapabilityRegistered()` before `RegisterCapability`, with valid availability and billing enum values.
+- **Billing type** - the chosen `Copilot Billing Type` is legal for the resource model in use (the validation matrix below).
+- **Key storage** - the Azure OpenAI key is a `SecretText`, never a plain `Text` field, and is persisted via `IsolatedStorage` (or AppSource Key Vault for marketplace apps); the setup table carries the right `DataClassification`.
+- **The AOAI call** - `SetCopilotCapability` is called before generation so credit tracking and gating work; `SetAuthorization` uses the correct `AOAI Model Type`; the response is checked with `IsSuccess()` before reading.
+- **Prompt construction** - the metaprompt goes through `SetPrimarySystemMessage` (persists across history) rather than `AddSystemMessage` (transient).
+- **Token budgeting** - generation reserves enough output tokens for the model's context window.
+
+## Action
+
+For each worklist item, evaluate the AL and emit findings. Reframe the correct-build rules as defects to flag:
+
+- **API key stored as `Text` instead of `SecretText`.** A plain `Text` key is visible in the debugger and at risk of logging. Flag `blocker` and cite the `security` secret-handling rule when one matches:
+
+  ```al
+  procedure SetApiKey(NewKey: SecretText)
+  begin
+      IsolatedStorage.Set('AOAI_KEY', NewKey, DataScope::Module);
+  end;
+  ```
+
+- **`RegisterCapability` without the `IsSaaSInfrastructure()` and `IsCapabilityRegistered()` guards.** Missing the SaaS guard registers on unsupported infrastructure; missing the registered guard throws on re-install. Flag `major`.
+- **Illegal billing-type and resource combination.** Validate against the matrix; an illegal pairing fails billing validation at runtime. Flag `major`.
+
+  | Partner billing type | BC AI resources | Own AOAI resource |
+  |---|---|---|
+  | `Microsoft Billed` | Production OK | Sandbox only |
+  | `Custom Billed` | Never allowed | OK |
+  | `Not Billed` | OK (no consumption) | OK (no consumption) |
+
+- **`SetCopilotCapability` not called before generation.** Without it, credit tracking and capability gating do not apply. Flag `major`.
+- **Response read without `IsSuccess()`.** Reading `GetLastMessage()` before checking `AOAIOperationResponse.IsSuccess()` surfaces empty or error content. Flag `major`.
+- **Metaprompt placed in `AddSystemMessage` instead of `SetPrimarySystemMessage`.** The metaprompt (role, format, guardrails) must persist across evicted history; `AddSystemMessage` content does not. Using the wrong call lets the guardrails silently drop mid-conversation. Flag `minor`.
+- **No output-token reservation against the context window.** A `SetMaxTokens` value plus estimated input that can exceed the model's context window produces truncated responses. Flag `minor` and recommend an `ApproximateTokenCount` check.
+- **Unsupported `System.AI` feature assumed.** Image (DALL-E) or speech (Whisper) usage is out of scope for the module. Flag `major`.
+
+Cite a `security` or `style` knowledge file in `references` when a finding maps onto one (for example a missing `DataClassification` on the setup table, or a user-facing error built from a string literal rather than a `Label`); otherwise emit an agent finding within this skill's domain (`references: []`, `id` prefixed `agent:`, severity capped per `skills/do.md`). Set `confidence` to `high` for unambiguous type or API matches, `medium` for heuristic detections or when any frontmatter dimension was `unknown`, and `low` for applicability-only advisories. For mechanical fixes (change a field type to `SecretText`, add the install guards, swap `AddSystemMessage` for `SetPrimarySystemMessage`), emit `findings[].suggested-code`; otherwise set `suggested-code-omission-reason`. See `skills/do.md` for the full contract.
+
+Outcome selection: `completed` when every worklist item was evaluated (including an empty `findings` array); `no-knowledge` when no applicable rule survived filtering; `not-applicable` when the change touches no Copilot capability or `System.AI` surface; `partial` on a budget cutoff; `failed` on an unrecoverable error (`outcome-reason` required).
+
+## Output
+
+Output conforms to the DO output contract. A populated example:
+
+```json
 {
-    value(50301; "Draft a Job") { Caption = 'Draft a Job'; }
-}
-```
-
-### Register on install
-
-```al
-codeunit 50302 "My Copilot Install"
-{
-    Subtype = Install;
-    InherentEntitlements = X;
-    InherentPermissions = X;
-
-    trigger OnInstallAppPerDatabase()
-    var
-        CopilotCapability: Codeunit "Copilot Capability";
-        EnvironmentInfo: Codeunit "Environment Information";
-        LearnMoreUrlTxt: Label 'https://example.com/copilot/draft-a-job', Locked = true;
-    begin
-        if not EnvironmentInfo.IsSaaSInfrastructure() then
-            exit;
-        if CopilotCapability.IsCapabilityRegistered(Enum::"Copilot Capability"::"Draft a Job") then
-            exit;
-        CopilotCapability.RegisterCapability(
-            Enum::"Copilot Capability"::"Draft a Job",
-            Enum::"Copilot Availability"::"Generally Available",
-            Enum::"Copilot Billing Type"::"Microsoft Billed",
-            LearnMoreUrlTxt);
-    end;
-}
-```
-
-| Parameter | Values |
-|---|---|
-| Availability | `Preview`, `Generally Available` |
-| Billing Type | `Custom Billed` (partner billed), `Microsoft Billed` (Microsoft billed, required if using BC AI resources), `Not Billed` |
-
-**Always guard with `IsSaaSInfrastructure()` and `IsCapabilityRegistered()`** before calling `RegisterCapability`. Duplicate registration throws.
-
-## Billing type validation
-
-Runtime validates the billing type against actual Azure OpenAI usage. Disallowed combinations:
-
-| Partner billing type | BC AI resources | Own AOAI resource |
-|---|---|---|
-| `Microsoft Billed` | Production OK | Sandbox only |
-| `Custom Billed` | **Never allowed** | OK |
-| `Not Billed` | OK (no consumption) | OK (no consumption) |
-
-Pick `Microsoft Billed` if your customers use BC AI credits. Pick `Custom Billed` if you bring your own AOAI deployment. Pick `Not Billed` only for trial/demo capabilities that should not show in customer billing.
-
-## Store the API key
-
-```al
-table 50301 "My Copilot Setup"
-{
-    DataClassification = SystemMetadata;
-
-    fields
+  "skill": { "id": "copilot-capability-implementation", "version": 1 },
+  "outcome": "completed",
+  "summary": {
+    "counts": { "blocker": 1, "major": 1, "minor": 0, "info": 0 },
+    "coverage": { "worklist-size": 6, "items-evaluated": 6 }
+  },
+  "findings": [
     {
-        field(1; "Primary Key"; Code[10]) { }
-        field(2; Endpoint;     Text[250]) { }
-        field(3; Deployment;   Text[250]) { }
-        // Note: ApiKey is NOT a regular field.
+      "id": "agent:aoai-key-not-secrettext",
+      "severity": "blocker",
+      "message": "The Azure OpenAI API key is held in a Text field, so it is exposed in the debugger and at risk of logging. Recommendation: change the field and accessor to SecretText and persist it via IsolatedStorage.",
+      "location": { "file": "src/Copilot/MyCopilotSetup.Table.al", "line": 9 },
+      "references": [],
+      "confidence": "high"
+    },
+    {
+      "id": "agent:response-read-without-issuccess",
+      "severity": "major",
+      "message": "GetLastMessage() is read without first checking AOAIOperationResponse.IsSuccess(), so an error or empty completion is treated as valid output. Recommendation: branch on IsSuccess() and raise a friendly Error otherwise.",
+      "location": { "file": "src/Copilot/GenerateJobProposal.Codeunit.al", "line": 44 },
+      "references": [],
+      "confidence": "high"
     }
+  ],
+  "suppressed": []
 }
 ```
-
-The API key field **must be `SecretText` type** in AL. This excludes it from the debugger.
-
-Persist via `IsolatedStorage`:
-
-```al
-procedure SetApiKey(NewKey: SecretText)
-begin
-    IsolatedStorage.Set('AOAI_KEY', NewKey, DataScope::Module);
-end;
-
-procedure GetApiKey() Result: SecretText
-begin
-    if not IsolatedStorage.Get('AOAI_KEY', DataScope::Module, Result) then
-        Error('AOAI key not configured.');
-end;
-```
-
-For marketplace apps, **AppSource Key Vault** is the alternative. Customers do not bring their own keys; Microsoft injects them at runtime.
-
-## Make the AOAI call
-
-```al
-codeunit 50303 "Generate Job Proposal"
-{
-    procedure Run(JobDescription: Text) Result: Text
-    var
-        AzureOpenAI: Codeunit "Azure OpenAI";
-        AOAIChatMessages: Codeunit "AOAI Chat Messages";
-        AOAIChatCompletionParams: Codeunit "AOAI Chat Completion Params";
-        AOAIOperationResponse: Codeunit "AOAI Operation Response";
-        Endpoint: Text;
-        Deployment: Text;
-        ApiKey: SecretText;
-        Metaprompt: Text;
-        UserPrompt: Text;
-    begin
-        // 1. Identify the capability so credit tracking and gating work
-        AzureOpenAI.SetCopilotCapability(Enum::"Copilot Capability"::"Draft a Job");
-
-        // 2. Load credentials
-        LoadConnectionDetails(Endpoint, Deployment, ApiKey);
-
-        // 3. Configure auth
-        AzureOpenAI.SetAuthorization(
-            Enum::"AOAI Model Type"::"Chat Completions",
-            Endpoint, Deployment, ApiKey);
-
-        // 4. Set generation parameters
-        AOAIChatCompletionParams.SetMaxTokens(2500);
-        AOAIChatCompletionParams.SetTemperature(0.3);
-
-        // 5. Build the conversation
-        Metaprompt := GetMetaprompt();              // role, scope, format rules
-        AOAIChatMessages.SetPrimarySystemMessage(Metaprompt);
-        AOAIChatMessages.AddUserMessage(JobDescription);
-
-        // 6. Generate
-        AzureOpenAI.GenerateChatCompletion(
-            AOAIChatMessages, AOAIChatCompletionParams, AOAIOperationResponse);
-
-        if not AOAIOperationResponse.IsSuccess() then
-            Error('Copilot could not generate a result.');
-
-        Result := AOAIChatMessages.GetLastMessage();
-    end;
-}
-```
-
-## Primary system message vs regular system message
-
-```al
-AOAIChatMessages.SetPrimarySystemMessage(Metaprompt);     // persists across history
-AOAIChatMessages.AddSystemMessage('Extra guidance');      // does NOT persist
-```
-
-The **PrimarySystemMessage persists across the chat history** even when older turns are evicted. Use it for the metaprompt (role, format, guardrails). Use regular system messages for transient hints.
-
-## Token budgeting
-
-```al
-local procedure FitsInContextWindow(MessagesTotalText: Text; MaxResponse: Integer): Boolean
-var
-    AzureOpenAI: Codeunit "Azure OpenAI";
-    EstTokens: Integer;
-    ContextWindow: Integer;
-begin
-    ContextWindow := 4096;            // GPT 3.5 Turbo; check your model
-    EstTokens := AzureOpenAI.ApproximateTokenCount(MessagesTotalText);
-    exit(EstTokens + MaxResponse <= ContextWindow);
-end;
-```
-
-Reserve enough for the response. The BC sample reserves 2500 tokens for output on a 4096-token model.
-
-## AOAI model types
-
-```
-Enum "AOAI Model Type"::
-  - "Embeddings"
-  - "Text Completions"
-  - "Chat Completions"   // recommended for most Copilot features
-```
-
-## Chat roles
-
-```
-Enum "AOAI Chat Roles"::
-  - User
-  - System
-  - Assistant
-```
-
-## Common gotchas
-
-| Symptom | Cause | Fix |
-|---|---|---|
-| "Capability not registered" | `RegisterCapability` never called or wrong enum value | Wrap registration in `OnInstallAppPerDatabase`, guard with `IsCapabilityRegistered` |
-| Billing validation fails | `Custom Billed` + BC AI resources, or `Microsoft Billed` + own resource in production | Re-check the matrix above |
-| API key visible in debugger | Used `Text` instead of `SecretText` | Change field type and reload |
-| `SetPrimarySystemMessage` content disappears mid-conversation | Used `AddSystemMessage` instead | Use `SetPrimarySystemMessage` for content that must persist |
-| Response truncated | `SetMaxTokens` too low or token budget exceeded | Lower input size or raise `SetMaxTokens`, check context window |
-
-## Note on the "Chat with Copilot" preview
-
-The in-product "Chat with Copilot" feature is **not extensible**. It's a separate UI Microsoft owns. AL chat completion is the API; the chat experience surfaced by the capability is the PromptDialog you build.
-
-## Related skills
-
-- `copilot-promptdialog` for the UI side
-- `ai-test-driven-development` for testing the generated output
-- `ai-agent-sdk` if the feature is an agent (not a one-shot capability)
-
-## References
-
-- Build the Copilot capability in AL: https://learn.microsoft.com/dynamics365/business-central/dev-itpro/developer/ai-build-capability-in-al
-- AzureOpenAI codeunit reference: see System Application repo at https://github.com/microsoft/BCApps
-- Azure OpenAI System message framework: https://learn.microsoft.com/azure/ai-services/openai/concepts/system-message
-- Azure OpenAI REST API: https://learn.microsoft.com/azure/ai-services/openai/reference
-- BC sample (Suggest Job): https://github.com/microsoft/BCTech/blob/master/samples/AzureOpenAI/Advanced_SuggestJob

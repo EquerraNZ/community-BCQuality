@@ -1,144 +1,105 @@
 ---
-kind: task-skill
+kind: action-skill
 id: ai-development-toolkit
 version: 1
-title: Prototype a custom BC agent with the AI Development Toolkit
-description: Prototype and refine custom Business Central agents using the in-product agent design experience and the Tasks AL API. Use when scoping a new agent, defining its instructions, or wiring AL events to trigger agent tasks.
+title: BC Agent Toolkit Integration Review
+description: Reviews AL that integrates with the Business Central agent design experience and the Tasks AL API and emits a findings report.
+inputs: [pr-diff, file-path]
+outputs: [findings-report]
 bc-version: [all]
 technologies: [al]
 countries: [w1]
 application-area: [all]
 ---
 
-# AI Development Toolkit for Business Central
+# BC Agent Toolkit Integration Review
 
-The in-product surface for designing, prototyping, and operating custom BC agents. Pairs with the Agent SDK (`ai-agent-sdk`) for the AL definition, the Evaluation suite (`ai-test-driven-development`) for tests, and the BC MCP Server (`bc-mcp-server-data`) for the data surface the agent operates on.
+Reviews AL that integrates with the Business Central AI Development Toolkit: the agent design experience, the Tasks AL API under `BCApps/src/System Application/App/Agent`, agent-session detection, custom-agent enumeration, and the discipline of source-controlling and versioning agent instructions. It emits a findings report. This is a leaf action skill: it invokes no sub-skills.
 
-This is currently a **preview feature** in BC. Preview supplemental terms apply.
+An orchestrator invokes this skill with either a `pr-diff` (the standard PR-review entry point for a change that wires events to agent tasks or detects agent context) or a `file-path` (single-file review). The skill produces a single JSON document conforming to the DO output contract. The toolkit is a preview feature, so the review treats missing iteration discipline (untested or unversioned instruction changes) as real findings.
 
-## When to use
+## Source
 
-- Scoping a new agent (Sales Order Agent, Payables Agent, custom)
-- Writing or refining the agent's natural-language instructions
-- Wiring AL events to create agent tasks (event-driven agents)
-- Manually running an agent task from the Agent Tasks page
-- Granting or revoking the right to create agents
+The rule set is this skill's own toolkit-integration knowledge plus BCQuality knowledge entries whose domain covers the concerns it touches (security for permission gates, style for agent-only confirm suppression and telemetry). Read the BCQuality knowledge index once and take the `security` and `style` domain entries as the citable candidate set across every enabled layer; do not open an article body until it enters the Worklist. The Tasks AL API contract, agent-session detection, and the BC 28.1+ discovery model are not covered by the corpus; for a concrete violation there, emit an agent finding within this skill's toolkit-integration domain.
 
-## Agent design experience
+## Relevance
 
-The toolkit gives consultants, product owners, domain experts, and developers a sandbox to prototype agents using natural language instructions. Built for fast iteration:
+Apply the frontmatter matching rules defined in READ against the task context:
 
-- Define agent goals and instructions
-- Choose the agent profile (which BC role-centre and permissions it has)
-- Define access controls (which companies, which API surface)
-- Test against real BC data in a sandbox
+- `bc-version` - the target BC version from the consuming app's `app.json`, or `unknown`. The discovery default changes at BC 28.1, so this dimension is load-bearing.
+- `technologies` - `[al]`.
+- `countries` - from the app's `app.json`, else `unknown`.
+- `application-area` - the union of areas declared by the changed objects; pass the actual set.
 
-Same agent runtime as Microsoft's built-in Sales Order and Payables agents.
+Discard files not applicable to AL. Retain conditionally applicable rules (any dimension `unknown`) only when configuration permits; cap their findings at `medium` confidence and name the unknown dimension.
 
-## Agent instructions
+## Worklist
 
-Natural-language goals and guardrails. Prompt-writing best practices apply:
+Narrow to the rules that apply to the change under review. A rule enters the worklist when the diff or file touches its area:
 
-- State the agent's role and scope explicitly
-- Provide concrete examples of in-scope and out-of-scope tasks
-- List the data sources and tools the agent should use
-- Spell out failure handling (when to ask for human intervention vs proceed)
+- **Agent-session detection** - code that should behave differently under an agent session calls `codeunit "Agent Session".IsAgentSession(AgentMetadataProvider::"Custom Agent")` and gates the agent-only path on the result.
+- **Tasks AL API usage** - calls into `codeunit "Custom Agent"` / `Record "Custom Agent Info"` enumerate agents correctly (`GetCustomAgents` then iterate the temporary record).
+- **Event-driven task triggers** - AL that creates agent tasks from page actions or business events does so through the sanctioned Tasks AL API rather than ad-hoc session calls.
+- **Interactive UI in an agent path** - confirms, dialogs, or `Message` calls that would block a non-interactive agent session are suppressed when `IsAgentSession` is true.
+- **Permissions and discovery (BC 28.1+)** - when admin-only agent creation is intended, the `ShowCanCreateAgent` gate uses `AgentSystemPermissions.CurrentUserHasCanManageAllAgentsPermission()`.
+- **Instruction iteration discipline** - agent instructions are source-controlled alongside the extension, versioned when behaviour changes, and the PR captures before/after sample task transcripts.
 
-The design experience has an editor with refine-and-test workflow. Iterate before promoting to production.
+## Action
 
-## Running an agent
+For each worklist item, evaluate the AL and emit findings. Reframe the correct-integration rules as defects to flag:
 
-Two trigger paths:
+- **Unguarded interactive UI on a path an agent can hit.** A `Confirm`, `Message`, `Page.RunModal`, or other blocking dialog reachable from an agent session hangs or fails the task. Flag `major` and recommend gating it behind an `IsAgentSession` check:
 
-1. **Manual**: open the Agent Tasks page in BC, click **Run task**, optionally pass a per-task message that complements the agent's general instructions.
-2. **Programmatic**: from AL via the Tasks AL API. Trigger on page actions or business events (email received, sales order posted, etc.). See "Tasks AL API" below.
+  ```al
+  local procedure IsCustomAgentRunningThis(): Boolean
+  var
+      AgentSession: Codeunit "Agent Session";
+      AgentMetadataProvider: Enum "Agent Metadata Provider";
+  begin
+      exit(AgentSession.IsAgentSession(AgentMetadataProvider::"Custom Agent"));
+  end;
+  ```
 
-Tasks queue, can be stopped, and can be restarted. Use insights from past task executions to refine the agent's instructions.
+- **Enumerating agents without `FindSet` discipline.** A `GetCustomAgents` call whose result is read without a proper `if TempAgentInfo.FindSet() then repeat ... until ... Next() = 0` loop is a `minor` correctness defect.
+- **Wrong metadata provider filter.** Detecting agent context with a provider other than `::"Custom Agent"` (when the agent is a custom agent) yields false negatives. Flag `major`.
+- **Admin-only intent not enforced.** When the design intends admin-only creation but `ShowCanCreateAgent` does not gate on `CurrentUserHasCanManageAllAgentsPermission()`, any user can create the agent on BC 28.1+. Flag `minor` and name the `bc-version` dimension.
+- **Instruction changes with no versioning or tests.** An instruction-text change that is not versioned, not run against the evaluation suite, or lands with no before/after transcripts in the PR is a `minor` process finding. Treat agent instructions like code.
+- **Hand-rolled task orchestration.** Creating or running agent tasks by bypassing the Tasks AL API is a `major` finding: it diverges from the supported runtime.
 
-## Tasks AL API (overview)
+Cite a `security` or `style` knowledge file in `references` when a finding maps onto one (for example an interactive confirm that the style domain already prohibits in non-interactive paths); otherwise emit an agent finding within this skill's domain (`references: []`, `id` prefixed `agent:`, severity capped per `skills/do.md`). Set `confidence` to `high` for unambiguous API or identifier matches, `medium` for heuristic detections or when any frontmatter dimension was `unknown`, and `low` for applicability-only advisories. For mechanical fixes (add the `IsAgentSession` guard, correct the metadata-provider value), emit `findings[].suggested-code`; otherwise set `suggested-code-omission-reason`. See `skills/do.md` for the full contract.
 
-Live under `BCApps/src/System Application/App/Agent`:
+Outcome selection: `completed` when every worklist item was evaluated (including an empty `findings` array); `no-knowledge` when no applicable rule survived filtering; `not-applicable` when the change touches no toolkit or Tasks AL API surface; `partial` on a budget cutoff; `failed` on an unrecoverable error (`outcome-reason` required).
 
+## Output
+
+Output conforms to the DO output contract. A populated example:
+
+```json
+{
+  "skill": { "id": "ai-development-toolkit", "version": 1 },
+  "outcome": "completed",
+  "summary": {
+    "counts": { "blocker": 0, "major": 1, "minor": 1, "info": 0 },
+    "coverage": { "worklist-size": 6, "items-evaluated": 6 }
+  },
+  "findings": [
+    {
+      "id": "agent:interactive-confirm-in-agent-path",
+      "severity": "major",
+      "message": "A Confirm dialog is reachable from a code path that runs under a custom agent session, where there is no user to answer it. Recommendation: gate the confirm behind Agent Session.IsAgentSession(AgentMetadataProvider::\"Custom Agent\") and default to the non-interactive branch when true.",
+      "location": { "file": "src/Sales/OrderPosting.Codeunit.al", "line": 73 },
+      "references": [],
+      "confidence": "high"
+    },
+    {
+      "id": "agent:agent-enumeration-no-findset",
+      "severity": "minor",
+      "message": "GetCustomAgents populates a temporary record that is then read without a FindSet/repeat loop, so only the first or no agent is processed. Recommendation: iterate with if TempAgentInfo.FindSet() then repeat ... until TempAgentInfo.Next() = 0.",
+      "location": { "file": "src/Agent/AgentList.Codeunit.al", "line": 22 },
+      "references": [],
+      "confidence": "medium"
+    }
+  ],
+  "suppressed": []
+}
 ```
-codeunit "Custom Agent"
-  - GetCustomAgents(var TempAgentInfo: Record "Custom Agent Info" temporary)
-    Enumerate custom agents available in this environment.
-
-record "Custom Agent Info" (temporary)
-  - "User Security ID" : Guid
-  - "User Name"        : Text
-
-codeunit "Agent Session"
-  - IsAgentSession(MetadataProvider: Enum "Agent Metadata Provider") : Boolean
-    Detect whether the current session is an agent session.
-
-enum "Agent Metadata Provider"
-  - ::"Custom Agent"
-    Use this value to filter to custom agent sessions.
-```
-
-### Detect agent context
-
-```al
-local procedure IsCustomAgentRunningThis(): Boolean
-var
-    AgentSession: Codeunit "Agent Session";
-    AgentMetadataProvider: Enum "Agent Metadata Provider";
-begin
-    exit(AgentSession.IsAgentSession(AgentMetadataProvider::"Custom Agent"));
-end;
-```
-
-Gate agent-only code paths on this check. For example, suppress an interactive confirm when running as an agent, or capture extra telemetry when the agent fires.
-
-### Enumerate custom agents
-
-```al
-local procedure ListAgents()
-var
-    CustomAgent: Codeunit "Custom Agent";
-    TempAgentInfo: Record "Custom Agent Info" temporary;
-begin
-    CustomAgent.GetCustomAgents(TempAgentInfo);
-    if TempAgentInfo.FindSet() then
-        repeat
-            // TempAgentInfo."User Security ID", TempAgentInfo."User Name"
-        until TempAgentInfo.Next() = 0;
-end;
-```
-
-For agent creation and task orchestration in AL, see `ai-agent-sdk`.
-
-## Permissions and discovery
-
-From **BC 28.1+**, agent discovery is no longer restricted to administrators by default. If you want admin-only agent creation, implement `ShowCanCreateAgent` (in your `IAgentFactory` implementation) and gate on:
-
-```al
-AgentSystemPermissions.CurrentUserHasCanManageAllAgentsPermission()
-```
-
-Per-user rights are managed via the **Agent Configuration Rights** page.
-
-## Iteration discipline
-
-Treat agent instructions like code:
-
-- Source-control the instructions text (alongside the AL extension that registers the agent)
-- Version the instructions when behaviour changes
-- Test every change against the Evaluation suite (`ai-test-driven-development`)
-- Capture before/after sample task transcripts in the PR
-
-## Related skills
-
-- `ai-agent-sdk` for the AL APIs that define and register agents (`IAgentFactory`, `IAgentMetadata`, `IAgentTaskExecution`)
-- `ai-test-driven-development` for agent test data sets, the Evaluation suite, and turn-loop tests
-- `copilot-promptdialog` for agent-related UX surfaces in BC
-- `bc-mcp-server-data` if the agent's actions should also be reachable from external AI clients
-
-## References
-
-- AI Development Toolkit FAQ: https://learn.microsoft.com/dynamics365/business-central/dev-itpro/ai/ai-development-toolkit-faq
-- Integrate with the Tasks AL API: https://learn.microsoft.com/dynamics365/business-central/dev-itpro/ai/ai-development-toolkit-tasks-api
-- Run an agent: https://learn.microsoft.com/dynamics365/business-central/dev-itpro/ai/ai-development-toolkit-run-agent
-- BCApps Agent source: https://github.com/microsoft/BCApps/tree/main/src/System%20Application/App/Agent
-- BCTech Agent and Email Integration sample: https://github.com/microsoft/BCTech

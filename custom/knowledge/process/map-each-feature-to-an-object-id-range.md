@@ -22,8 +22,3 @@ After the spec is approved and before implementing, write a plan that decides wh
 ## Anti Pattern
 
 Implementing a feature directly from the spec with no object plan, so object IDs are picked ad hoc outside the reserved range, the reuse-versus-custom decision is made implicitly while coding, and there is no ordered task list to work through. The consequence is ID collisions, missed permission-set or upgrade tasks, and rework when a verifier rejects an out-of-range object late. The signal: new AL objects with IDs outside the feature's assigned range, or a feature being built with no plan mapping the spec to a concrete object list and task sequence.
-
-## See also
-
-- `specify-before-you-build.md`
-- `ground-work-in-a-solution-constitution.md`
